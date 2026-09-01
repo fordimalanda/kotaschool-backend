@@ -1,0 +1,259 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CodeRole {
+  ADMIN
+  TEACHER
+  SECRETARY
+  PEDAGOGICAL_COUNCIL
+}
+
+enum Sexe {
+  M
+  F
+}
+
+enum StatutEvaluation {
+  BROUILLON
+  SOUMISE
+  VALIDEE
+}
+
+enum TypeBulletin {
+  PERIODE
+  SEMESTRE
+  ANNUEL
+}
+
+model Role {
+  id String @id @default(uuid()) @map("idRole")
+  code CodeRole @unique
+  libelle String @map("libelleRole")
+  utilisateurs Utilisateur[]
+  @@map("roles")
+}
+
+model Utilisateur {
+  id String @id @default(uuid()) @map("idUtilisateur")
+  nomUtilisateur String @unique
+  motDePasse String
+  estActif Boolean @default(true)
+  supprimeLe DateTime?
+  idRole String
+  enseignantId String? @unique
+  role Role @relation(fields: [idRole], references: [id])
+  enseignant Enseignant? @relation(fields: [enseignantId], references: [id])
+  notesValidees Note[] @relation("Validateur")
+  creeLe DateTime @default(now())
+  modifieLe DateTime @updatedAt
+  @@index([idRole])
+  @@map("utilisateurs")
+}
+
+model Section {
+  id String @id @default(uuid()) @map("idSection")
+  libelle String @unique
+  options Option[]
+  @@map("sections")
+}
+
+model Option {
+  id String @id @default(uuid()) @map("idOption")
+  libelle String
+  idSection String
+  section Section @relation(fields: [idSection], references: [id])
+  classes Classe[]
+  @@unique([libelle, idSection])
+  @@map("options")
+}
+
+model Classe {
+  id String @id @default(uuid()) @map("idClasse")
+  libelle String
+  niveau String
+  idOption String
+  estActif Boolean @default(true)
+  supprimeLe DateTime?
+  option Option @relation(fields: [idOption], references: [id])
+  inscriptions Inscription[]
+  classeMatieres ClasseMatiere[]
+  @@unique([libelle, idOption])
+  @@map("classes")
+}
+
+model Eleve {
+  matricule String @id
+  nom String
+  postnom String?
+  prenom String
+  sexe Sexe
+  dateNaissance DateTime
+  lieuNaissance String?
+  adresse String?
+  estActif Boolean @default(true)
+  supprimeLe DateTime?
+  inscriptions Inscription[]
+  @@map("eleves")
+}
+
+model Enseignant {
+  id String @id @default(uuid()) @map("idEnseignant")
+  nom String
+  postnom String?
+  prenom String
+  sexe Sexe
+  telephone String?
+  email String? @unique
+  estActif Boolean @default(true)
+  supprimeLe DateTime?
+  utilisateur Utilisateur?
+  affectations Affectation[]
+  @@map("enseignants")
+}
+
+model Matiere {
+  id String @id @default(uuid()) @map("idMatiere")
+  libelle String @unique
+  classeMatieres ClasseMatiere[]
+  @@map("matieres")
+}
+
+model ClasseMatiere {
+  id String @id @default(uuid()) @map("idClasseMatiere")
+  idClasse String
+  idMatiere String
+  coefficient Decimal @db.Decimal(6, 2)
+  classe Classe @relation(fields: [idClasse], references: [id])
+  matiere Matiere @relation(fields: [idMatiere], references: [id])
+  affectations Affectation[]
+  @@unique([idClasse, idMatiere])
+  @@map("classe_matieres")
+}
+
+model AnneeScolaire {
+  id String @id @default(uuid()) @map("idAnnee")
+  libelle String @unique
+  estActive Boolean @default(false)
+  semestres Semestre[]
+  inscriptions Inscription[]
+  affectations Affectation[]
+  @@map("annees_scolaires")
+}
+
+model Semestre {
+  id String @id @default(uuid()) @map("idSemestre")
+  libelle String
+  idAnnee String
+  annee AnneeScolaire @relation(fields: [idAnnee], references: [id])
+  periodes Periode[]
+  evaluations Evaluation[]
+  bulletins Bulletin[]
+  @@unique([libelle, idAnnee])
+  @@map("semestres")
+}
+
+model Periode {
+  id String @id @default(uuid()) @map("idPeriode")
+  libelle String
+  idSemestre String
+  semestre Semestre @relation(fields: [idSemestre], references: [id])
+  evaluations Evaluation[]
+  @@unique([libelle, idSemestre])
+  @@map("periodes")
+}
+
+model Inscription {
+  id String @id @default(uuid()) @map("idInscription")
+  matricule String
+  idClasse String
+  idAnnee String
+  eleve Eleve @relation(fields: [matricule], references: [matricule])
+  classe Classe @relation(fields: [idClasse], references: [id])
+  annee AnneeScolaire @relation(fields: [idAnnee], references: [id])
+  notes Note[]
+  bulletins Bulletin[]
+  @@unique([matricule, idAnnee])
+  @@index([idClasse, idAnnee])
+  @@map("inscriptions")
+}
+
+model Affectation {
+  id String @id @default(uuid()) @map("idAffectation")
+  idEnseignant String
+  idClasseMatiere String
+  idAnnee String
+  enseignant Enseignant @relation(fields: [idEnseignant], references: [id])
+  classeMatiere ClasseMatiere @relation(fields: [idClasseMatiere], references: [id])
+  annee AnneeScolaire @relation(fields: [idAnnee], references: [id])
+  evaluations Evaluation[]
+  @@unique([idEnseignant, idClasseMatiere, idAnnee])
+  @@map("affectations")
+}
+
+model TypeEvaluation {
+  id String @id @default(uuid()) @map("idTypeEvaluation")
+  libelle String @unique
+  evaluations Evaluation[]
+  @@map("types_evaluation")
+}
+
+model Evaluation {
+  id String @id @default(uuid()) @map("idEvaluation")
+  libelle String
+  idAffectation String
+  idPeriode String?
+  idSemestre String
+  idTypeEvaluation String
+  maximum Decimal @db.Decimal(8, 2)
+  ponderation Decimal @default(1) @db.Decimal(6, 2)
+  dateEvaluation DateTime
+  statut StatutEvaluation @default(BROUILLON)
+  affectation Affectation @relation(fields: [idAffectation], references: [id])
+  periode Periode? @relation(fields: [idPeriode], references: [id])
+  semestre Semestre @relation(fields: [idSemestre], references: [id])
+  typeEvaluation TypeEvaluation @relation(fields: [idTypeEvaluation], references: [id])
+  notes Note[]
+  @@index([idAffectation, idPeriode])
+  @@map("evaluations")
+}
+
+model Note {
+  id String @id @default(uuid()) @map("idNote")
+  valeurNote Decimal @db.Decimal(8, 2)
+  observation String?
+  estValide Boolean @default(false)
+  valideParId String?
+  dateValidation DateTime?
+  idInscription String
+  idEvaluation String
+  inscription Inscription @relation(fields: [idInscription], references: [id])
+  evaluation Evaluation @relation(fields: [idEvaluation], references: [id])
+  validePar Utilisateur? @relation("Validateur", fields: [valideParId], references: [id])
+  creeLe DateTime @default(now())
+  modifieLe DateTime @updatedAt
+  @@unique([idInscription, idEvaluation])
+  @@map("notes")
+}
+
+model Bulletin {
+  id String @id @default(uuid()) @map("idBulletin")
+  type TypeBulletin
+  totalObtenu Decimal @db.Decimal(10, 2)
+  totalMaximum Decimal @db.Decimal(10, 2)
+  pourcentage Decimal @db.Decimal(6, 2)
+  rang Int?
+  decision String?
+  idInscription String
+  idSemestre String?
+  idAnnee String
+  inscription Inscription @relation(fields: [idInscription], references: [id])
+  semestre Semestre? @relation(fields: [idSemestre], references: [id])
+  @@index([idInscription, idAnnee, type])
+  @@map("bulletins")
+}
