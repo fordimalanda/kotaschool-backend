@@ -199,6 +199,7 @@ model Affectation {
 model TypeEvaluation {
   id String @id @default(uuid()) @map("idTypeEvaluation")
   libelle String @unique
+  ponderation Decimal @default(1) @db.Decimal(5, 2)
   evaluations Evaluation[]
   @@map("types_evaluation")
 }
@@ -210,7 +211,7 @@ model Evaluation {
   idPeriode String?
   idSemestre String
   idTypeEvaluation String
-  maximum Decimal @db.Decimal(8, 2)
+  maximum Decimal @default(20) @db.Decimal(8, 2)
   ponderation Decimal @default(1) @db.Decimal(6, 2)
   dateEvaluation DateTime
   statut StatutEvaluation @default(BROUILLON)
