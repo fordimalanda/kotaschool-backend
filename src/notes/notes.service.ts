@@ -9,7 +9,15 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 type SemestreBulletinData = {
   inscriptionId: string;
   semestreId: string;
-  lignes: { matiere: string; coefficient: number; note: number; noteBulletin: number }[];
+  lignes: { 
+    matiere: string; 
+    coefficient: number; 
+    note: number; 
+    noteBulletin: number;
+    p1?: number;
+    p2?: number;
+    examen?: number;
+  }[];
   totalObtenu: number;
   totalMaximum: number;
   pourcentage: number;
@@ -20,9 +28,15 @@ type SemestreBulletinData = {
 type AnnualBulletinLigne = {
   matiere: string;
   coefficient: number;
+  p1?: number;
+  p2?: number;
+  examS1?: number;
   noteS1: number;
   pointsS1: number;
   maxS1: number;
+  p3?: number;
+  p4?: number;
+  examS2?: number;
   noteS2: number;
   pointsS2: number;
   maxS2: number;
@@ -330,18 +344,19 @@ export class NotesService {
 
   /** Détail du bulletin d'un élève : note_bulletin = note_matière × coefficient. */
   async computeSemestreBulletin(semestreId: string, inscriptionId: string): Promise<SemestreBulletinData> {
-    const [inscription, semestre] = await Promise.all([
+    const [inscription, semestre, periodes] = await Promise.all([
       this.prisma.inscription.findUnique({
         where: { id: inscriptionId },
         include: { classe: { include: { classeMatieres: { include: { matiere: true } } } } },
       }),
       this.prisma.semestre.findUnique({ where: { id: semestreId } }),
+      this.prisma.periode.findMany({ where: { idSemestre: semestreId }, orderBy: { libelle: 'asc' } }),
     ]);
     if (!inscription || !semestre) throw new NotFoundException('Inscription ou semestre introuvable');
 
     let totalObtenu = 0;
     let totalMaximum = 0;
-    const lignes: { matiere: string; coefficient: number; note: number; noteBulletin: number }[] = [];
+    const lignes: SemestreBulletinData['lignes'] = [];
 
     for (const cm of inscription.classe.classeMatieres) {
       const affectation = await this.prisma.affectation.findFirst({ where: { idClasseMatiere: cm.id, idAnnee: inscription.idAnnee } });
@@ -351,7 +366,30 @@ export class NotesService {
       const noteBulletin = round2(note * coefficient);
       totalObtenu += noteBulletin;
       totalMaximum += coefficient * 20;
-      lignes.push({ matiere: cm.matiere.libelle, coefficient, note, noteBulletin });
+
+      let p1 = 0;
+      let p2 = 0;
+      if (periodes[0]) {
+        p1 = await this.computePeriodeNote(affectation.id, periodes[0].id, inscriptionId);
+      }
+      if (periodes[1]) {
+        p2 = await this.computePeriodeNote(affectation.id, periodes[1].id, inscriptionId);
+      }
+
+      const examEval = await this.prisma.evaluation.findFirst({
+        where: { idAffectation: affectation.id, idSemestre: semestreId, idPeriode: null, statut: StatutEvaluation.VALIDEE },
+      });
+      let examen = 0;
+      if (examEval) {
+        const noteDb = await this.prisma.note.findUnique({
+          where: { idInscription_idEvaluation: { idInscription: inscriptionId, idEvaluation: examEval.id } },
+        });
+        if (noteDb && noteDb.estValide) {
+          examen = round2((Number(noteDb.valeurNote) / Number(examEval.maximum)) * 20);
+        }
+      }
+
+      lignes.push({ matiere: cm.matiere.libelle, coefficient, note, noteBulletin, p1, p2, examen });
     }
 
     const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);
@@ -596,7 +634,28 @@ export class NotesService {
       const noteS2 = d.coef === 0 ? 0 : round2(d.ptS2 / d.coef);
       totalObtenu += totalAnnuel;
       totalMaximum += maxAnnuel;
-      lignes.push({ matiere, coefficient: d.coef, noteS1, pointsS1: d.ptS1, maxS1: d.maxS1, noteS2, pointsS2: d.ptS2, maxS2: d.maxS2, totalAnnuel, maxAnnuel, pourcentage });
+      const l1 = bulS1.lignes.find((l) => l.matiere === matiere);
+      const l2 = bulS2.lignes.find((l) => l.matiere === matiere);
+
+      lignes.push({
+        matiere,
+        coefficient: d.coef,
+        p1: l1?.p1 ?? 0,
+        p2: l1?.p2 ?? 0,
+        examS1: l1?.examen ?? 0,
+        noteS1,
+        pointsS1: d.ptS1,
+        maxS1: d.maxS1,
+        p3: l2?.p1 ?? 0,
+        p4: l2?.p2 ?? 0,
+        examS2: l2?.examen ?? 0,
+        noteS2,
+        pointsS2: d.ptS2,
+        maxS2: d.maxS2,
+        totalAnnuel,
+        maxAnnuel,
+        pourcentage,
+      });
     }
 
     const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);

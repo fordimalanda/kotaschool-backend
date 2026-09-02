@@ -563,16 +563,25 @@ async function main() {
   // ----------------------------------------------------
   console.log('✍️ 11. Génération complète des évaluations et notes (S1: P1 & P2, S2: P3 & P4) pour les 12 classes...');
 
-  // Configuration des évaluations par semestre et période
-  const evalConfigs = [
+  // Configuration des évaluations par semestre et période (avec Session d'Examens semestriels)
+  const evalConfigs: {
+    semestre: any;
+    periode: any | null;
+    typeLib: string;
+    suffix: string;
+    pond: number;
+    date: Date;
+  }[] = [
     // SEMESTRE 1
     { semestre: semestre1, periode: p1, typeLib: 'Interrogation', suffix: 'P1 - Interrogation 1', pond: 1, date: new Date('2026-10-15') },
     { semestre: semestre1, periode: p1, typeLib: 'Travail Pratique', suffix: 'P1 - TP 1', pond: 1, date: new Date('2026-10-28') },
     { semestre: semestre1, periode: p2, typeLib: 'Interrogation', suffix: 'P2 - Interrogation 1', pond: 1, date: new Date('2026-12-10') },
+    { semestre: semestre1, periode: null, typeLib: 'Examen', suffix: 'Examen 1er Semestre', pond: 2, date: new Date('2027-01-15') },
     // SEMESTRE 2
     { semestre: semestre2, periode: p3, typeLib: 'Interrogation', suffix: 'P3 - Interrogation 1', pond: 1, date: new Date('2027-02-15') },
     { semestre: semestre2, periode: p3, typeLib: 'Travail Pratique', suffix: 'P3 - TP 1', pond: 1, date: new Date('2027-03-01') },
     { semestre: semestre2, periode: p4, typeLib: 'Interrogation', suffix: 'P4 - Interrogation 1', pond: 1, date: new Date('2027-05-15') },
+    { semestre: semestre2, periode: null, typeLib: 'Examen', suffix: 'Examen 2ème Semestre', pond: 2, date: new Date('2027-06-20') },
   ];
 
   // Notes de base réparties pour les 17 élèves d'une classe pour créer des moyennes et classements réalistes
@@ -603,7 +612,7 @@ async function main() {
           data: {
             libelle: `${cm.matiere.libelle} (${cfg.suffix})`,
             idAffectation: aff.id,
-            idPeriode: cfg.periode.id,
+            idPeriode: cfg.periode ? cfg.periode.id : null,
             idSemestre: cfg.semestre.id,
             idTypeEvaluation: typeEval.id,
             maximum: new Prisma.Decimal(20),
@@ -617,7 +626,7 @@ async function main() {
         if (!evaluationsBySemAndClasse.has(semClassKey)) {
           evaluationsBySemAndClasse.set(semClassKey, []);
         }
-        evaluationsBySemAndClasse.get(semClassKey)!.push({ evaluation, cm, aff, periodeId: cfg.periode.id, pond: cfg.pond });
+        evaluationsBySemAndClasse.get(semClassKey)!.push({ evaluation, cm, aff, periodeId: cfg.periode ? cfg.periode.id : null, pond: cfg.pond, isExam: !cfg.periode });
 
         for (let sIdx = 0; sIdx < students.length; sIdx++) {
           const studentObj = students[sIdx];
@@ -721,7 +730,17 @@ async function main() {
             countEvaluatedPeriodes += 1;
           }
 
-          const noteMatiere = countEvaluatedPeriodes === 0 ? 0 : round2(sumPeriodes / countEvaluatedPeriodes);
+          const examEvals = evals.filter((e) => e.isExam);
+          let sumSemestre = sumPeriodes;
+          let weightSemestre = countEvaluatedPeriodes;
+
+          for (const ev of examEvals) {
+            const noteVal = notesCache.get(`${studentObj.inscription.id}_${ev.evaluation.id}`) ?? 10;
+            sumSemestre += noteVal * 2; // Examen compte double (norme RDC EPSP)
+            weightSemestre += 2;
+          }
+
+          const noteMatiere = weightSemestre === 0 ? 0 : round2(sumSemestre / weightSemestre);
           const coefficient = Number(cm.coefficient);
           const noteBulletin = round2(noteMatiere * coefficient);
 
