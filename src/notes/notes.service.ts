@@ -215,13 +215,22 @@ export class NotesService {
     return sumWeights === 0 ? 0 : round2(sumWeighted / sumWeights);
   }
 
-  /** Note de semestre sur 20 : moyenne des périodes ; les examens comptent double. */
+  /** Note de semestre sur 20 : moyenne des périodes réellement évaluées ; les examens comptent double. */
   async computeSemestreNote(affectationId: string, semestreId: string, inscriptionId: string): Promise<number> {
     const periodes = await this.prisma.periode.findMany({ where: { idSemestre: semestreId }, orderBy: { libelle: 'asc' } });
+
+    // On ne retient que les périodes ayant au moins une évaluation validée pour cette affectation,
+    // afin qu'une période non encore évaluée ne fasse pas chuter artificiellement la moyenne.
+    const evaluatedPeriodes = await this.prisma.evaluation.findMany({
+      where: { idAffectation: affectationId, idSemestre: semestreId, idPeriode: { not: null }, statut: StatutEvaluation.VALIDEE },
+      select: { idPeriode: true },
+    });
+    const gradedPeriodeIds = new Set(evaluatedPeriodes.map((e) => e.idPeriode as string));
 
     let sum = 0;
     let weight = 0;
     for (const p of periodes) {
+      if (!gradedPeriodeIds.has(p.id)) continue;
       sum += await this.computePeriodeNote(affectationId, p.id, inscriptionId);
       weight += 1;
     }
