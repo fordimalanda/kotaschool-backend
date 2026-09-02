@@ -54,6 +54,7 @@ export class NotesService {
       this.prisma.evaluation.findMany({
         where: { affectation: { idEnseignant: user.enseignantId } },
         include: EVALUATION_INCLUDE,
+        _count: { select: { notes: true } },
         orderBy: { dateEvaluation: 'desc' },
       }),
     ]);
@@ -179,6 +180,7 @@ export class NotesService {
     return this.prisma.evaluation.findMany({
       where: { statut: StatutEvaluation.SOUMISE },
       include: EVALUATION_INCLUDE,
+      _count: { select: { notes: true } },
       orderBy: { dateEvaluation: 'asc' },
     });
   }
