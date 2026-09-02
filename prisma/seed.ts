@@ -8,10 +8,10 @@ async function seedRolesAndUsers() {
   for (const code of Object.values(CodeRole)) await prisma.role.upsert({ where: { code }, update: {}, create: { code, libelle: { ADMIN: 'Administrateur', TEACHER: 'Enseignant', SECRETARY: 'Administration', PEDAGOGICAL_COUNCIL: 'Conseil pédagogique', STUDENT: 'Élève' }[code] } });
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { code: CodeRole.ADMIN } });
   const teacherRole = await prisma.role.findUniqueOrThrow({ where: { code: CodeRole.TEACHER } });
-  await prisma.utilisateur.upsert({ where: { nomUtilisateur: 'admin' }, update: { email: 'admin@kotaschool.local' }, create: { nomUtilisateur: 'admin', email: 'admin@kotaschool.local', motDePasse: await bcrypt.hash('ChangeMe123!', 12), idRole: adminRole.id } });
+  await prisma.utilisateur.upsert({ where: { nomUtilisateur: 'admin' }, update: { email: 'admin@kotaschool.local', motDePasse: await bcrypt.hash('admin', 12) }, create: { nomUtilisateur: 'admin', email: 'admin@kotaschool.local', motDePasse: await bcrypt.hash('admin', 12), idRole: adminRole.id } });
   // Compte enseignant de test : indispensable pour accéder à la « Saisie des notes » (rôle TEACHER).
   const enseignant = await prisma.enseignant.upsert({ where: { id: ENSEIGNANT_TEST_ID }, update: {}, create: { id: ENSEIGNANT_TEST_ID, nom: 'Enseignant', prenom: 'Test', sexe: Sexe.M } });
-  await prisma.utilisateur.upsert({ where: { nomUtilisateur: 'prof' }, update: { email: 'prof@kotaschool.local' }, create: { nomUtilisateur: 'prof', email: 'prof@kotaschool.local', motDePasse: await bcrypt.hash('ChangeMe123!', 12), idRole: teacherRole.id, enseignantId: enseignant.id } });
+  await prisma.utilisateur.upsert({ where: { nomUtilisateur: 'prof' }, update: { email: 'prof@kotaschool.local', motDePasse: await bcrypt.hash('prof', 12) }, create: { nomUtilisateur: 'prof', email: 'prof@kotaschool.local', motDePasse: await bcrypt.hash('prof', 12), idRole: teacherRole.id, enseignantId: enseignant.id } });
   return { enseignant };
 }
 
