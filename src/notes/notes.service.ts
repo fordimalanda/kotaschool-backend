@@ -17,7 +17,7 @@ type SemestreBulletinData = {
   rang?: number;
 };
 
-const EVALUATION_INCLUDE = {
+const EVALUATION_INCLUDE: Prisma.EvaluationInclude = {
   affectation: {
     include: {
       annee: true,
@@ -28,7 +28,7 @@ const EVALUATION_INCLUDE = {
   periode: true,
   semestre: { include: { annee: true } },
   typeEvaluation: true,
-} as const;
+};
 
 @Injectable()
 export class NotesService {
@@ -53,7 +53,12 @@ export class NotesService {
       this.prisma.typeEvaluation.findMany({ orderBy: { libelle: 'asc' } }),
       this.prisma.evaluation.findMany({
         where: { affectation: { idEnseignant: user.enseignantId } },
-        include: EVALUATION_INCLUDE,
+        include: {
+          affectation: { include: { annee: true, enseignant: { select: { nom: true, prenom: true } }, classeMatiere: { include: { classe: true, matiere: true } } } },
+          periode: true,
+          semestre: { include: { annee: true } },
+          typeEvaluation: true,
+        },
         _count: { select: { notes: true } },
         orderBy: { dateEvaluation: 'desc' },
       }),
@@ -179,7 +184,12 @@ export class NotesService {
   async pendingValidations() {
     return this.prisma.evaluation.findMany({
       where: { statut: StatutEvaluation.SOUMISE },
-      include: EVALUATION_INCLUDE,
+      include: {
+        affectation: { include: { annee: true, enseignant: { select: { nom: true, prenom: true } }, classeMatiere: { include: { classe: true, matiere: true } } } },
+        periode: true,
+        semestre: { include: { annee: true } },
+        typeEvaluation: true,
+      },
       _count: { select: { notes: true } },
       orderBy: { dateEvaluation: 'asc' },
     });
