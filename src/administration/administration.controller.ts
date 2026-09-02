@@ -6,8 +6,9 @@ import { RolesGuard } from '../auth/roles.guard';
 import { AppRole } from '../auth/roles.enum';
 import { AdministrationService } from './administration.service';
 class LabelDto { @IsString() libelle!: string; }
-class TeacherDto { @IsString() nom!: string; @IsOptional() @IsString() postnom?: string; @IsString() prenom!: string; @IsIn(['M','F']) sexe!: 'M' | 'F'; @IsOptional() @IsString() telephone?: string; @IsOptional() @IsEmail() email?: string; }
-class StudentDto { @IsString() matricule!: string; @IsString() nom!: string; @IsOptional() @IsString() postnom?: string; @IsString() prenom!: string; @IsIn(['M','F']) sexe!: 'M' | 'F'; @IsDateString() dateNaissance!: string; @IsOptional() @IsString() lieuNaissance?: string; @IsOptional() @IsString() adresse?: string; }
+class TeacherDto { @IsString() nom!: string; @IsOptional() @IsString() postnom?: string; @IsString() prenom!: string; @IsIn(['M','F']) sexe!: 'M' | 'F'; @IsOptional() @IsString() telephone?: string; @IsOptional() @IsEmail() email?: string; @IsOptional() @IsString() motDePasse?: string; }
+class StudentDto { @IsString() matricule!: string; @IsString() nom!: string; @IsOptional() @IsString() postnom?: string; @IsString() prenom!: string; @IsIn(['M','F']) sexe!: 'M' | 'F'; @IsDateString() dateNaissance!: string; @IsOptional() @IsString() lieuNaissance?: string; @IsOptional() @IsString() adresse?: string; @IsOptional() @IsEmail() email?: string; @IsOptional() @IsString() motDePasse?: string; }
+class AdminDto { @IsEmail() email!: string; @IsOptional() @IsString() motDePasse?: string; }
 class OptionDto extends LabelDto { @IsString() idSection!: string; }
 class ClasseDto extends LabelDto { @IsString() niveau!: string; @IsString() idOption!: string; }
 class AnneeDto extends LabelDto { @IsOptional() @IsBoolean() estActive?: boolean; }
@@ -21,6 +22,7 @@ export class AdministrationController {
   @Get('catalogue') catalogue() { return this.service.catalogue(); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('teachers') teacher(@Body() dto: TeacherDto) { return this.service.createTeacher(dto); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('students') student(@Body() dto: StudentDto) { return this.service.createStudent(dto); }
+  @Roles(AppRole.ADMIN) @Post('admins') admin(@Body() dto: AdminDto) { return this.service.createAdmin(dto); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('sections') section(@Body() dto: LabelDto) { return this.service.createSection(dto.libelle); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('options') option(@Body() dto: OptionDto) { return this.service.createOption(dto); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('classes') classe(@Body() dto: ClasseDto) { return this.service.createClasse(dto); }

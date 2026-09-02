@@ -70,6 +70,13 @@ export class NotesController {
     return this.notes.bulletinsOfInscription(id);
   }
 
+  // --- Élève : consultation de ses résultats ---
+  @Roles(AppRole.STUDENT)
+  @Get('my-grades')
+  myGrades(@Req() req: { user: { id: string } }) {
+    return this.notes.myGrades(req.user.id);
+  }
+
   // --- Rapports / Bulletins (secrétariat, conseil, admin) ---
   @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
   @Get('reports/semestres')

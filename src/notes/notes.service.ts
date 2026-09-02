@@ -352,6 +352,64 @@ export class NotesService {
   // Bulletins / Rapports (consultation par le secrétariat)
   // ------------------------------------------------------------------
 
+  // ------------------------------------------------------------------
+  // Élève : consultation de ses propres résultats
+  // ------------------------------------------------------------------
+
+  async myGrades(userId: string) {
+    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, include: { eleve: true } });
+    if (!user?.eleve) throw new ForbiddenException('Aucun élève associé à ce compte');
+
+    const inscription = await this.prisma.inscription.findFirst({
+      where: { matricule: user.eleve.matricule },
+      include: { annee: true, classe: { include: { option: { include: { section: true } } } } },
+      orderBy: { annee: { libelle: 'desc' } },
+    });
+    if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
+
+    const [semestres, notes, bulletins] = await Promise.all([
+      this.prisma.semestre.findMany({ where: { idAnnee: inscription.idAnnee }, include: { periodes: { orderBy: { libelle: 'asc' } } }, orderBy: { libelle: 'asc' } }),
+      this.prisma.note.findMany({
+        where: { idInscription: inscription.id },
+        include: { evaluation: { include: { typeEvaluation: true, periode: true, semestre: true, affectation: { include: { classeMatiere: { include: { matiere: true } } } } } } },
+        orderBy: { evaluation: { dateEvaluation: 'desc' } },
+      }),
+      this.prisma.bulletin.findMany({ where: { idInscription: inscription.id, type: TypeBulletin.SEMESTRE } }),
+    ]);
+
+    const bulletinBySem = new Map(bulletins.map((b) => [b.idSemestre, b]));
+    const semestersView = semestres.map((s) => {
+      const resultats = notes
+        .filter((n) => n.evaluation.idSemestre === s.id)
+        .map((n) => ({
+          libelle: n.evaluation.libelle,
+          type: n.evaluation.typeEvaluation.libelle,
+          periode: n.evaluation.periode?.libelle ?? 'Examen',
+          matiere: n.evaluation.affectation.classeMatiere.matiere.libelle,
+          note: Number(n.valeurNote),
+          maximum: Number(n.evaluation.maximum),
+          statut: n.evaluation.statut,
+          estValide: n.estValide,
+        }));
+      const bul = bulletinBySem.get(s.id);
+      return {
+        id: s.id,
+        libelle: s.libelle,
+        resultats,
+        bulletin: bul ? { totalObtenu: Number(bul.totalObtenu), totalMaximum: Number(bul.totalMaximum), pourcentage: Number(bul.pourcentage), rang: bul.rang, decision: bul.decision } : null,
+      };
+    });
+
+    return {
+      eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
+      classe: inscription.classe.libelle,
+      option: inscription.classe.option.libelle,
+      section: inscription.classe.option.section.libelle,
+      annee: inscription.annee.libelle,
+      semestres: semestersView,
+    };
+  }
+
   async reportSemestres() {
     return this.prisma.semestre.findMany({ include: { annee: true }, orderBy: { libelle: 'asc' } });
   }
