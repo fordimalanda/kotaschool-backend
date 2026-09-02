@@ -69,4 +69,23 @@ export class NotesController {
   bulletins(@Param('id') id: string) {
     return this.notes.bulletinsOfInscription(id);
   }
+
+  // --- Rapports / Bulletins (secrétariat, conseil, admin) ---
+  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Get('reports/semestres')
+  reportSemestres() {
+    return this.notes.reportSemestres();
+  }
+
+  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Get('reports/semestre/:id')
+  board(@Param('id') id: string) {
+    return this.notes.classBulletinBoard(id);
+  }
+
+  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Get('reports/inscription/:inscriptionId/semestre/:semestreId')
+  detail(@Param('inscriptionId') inscriptionId: string, @Param('semestreId') semestreId: string) {
+    return this.notes.inscriptionBulletinDetail(inscriptionId, semestreId);
+  }
 }

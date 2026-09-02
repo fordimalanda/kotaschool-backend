@@ -349,6 +349,69 @@ export class NotesService {
   }
 
   // ------------------------------------------------------------------
+  // Bulletins / Rapports (consultation par le secrétariat)
+  // ------------------------------------------------------------------
+
+  async reportSemestres() {
+    return this.prisma.semestre.findMany({ include: { annee: true }, orderBy: { libelle: 'asc' } });
+  }
+
+  /** Tableau de bord du semestre : classement complet de la cohorte. */
+  async classBulletinBoard(semestreId: string) {
+    const semestre = await this.prisma.semestre.findUnique({ where: { id: semestreId }, include: { annee: true } });
+    if (!semestre) throw new NotFoundException('Semestre introuvable');
+    const bulletins = await this.prisma.bulletin.findMany({
+      where: { idSemestre: semestreId, type: TypeBulletin.SEMESTRE },
+      include: { inscription: { include: { eleve: true, classe: true } } },
+      orderBy: [{ rang: 'asc' }, { pourcentage: 'desc' }],
+    });
+    return {
+      semestre: { id: semestre.id, libelle: semestre.libelle, annee: semestre.annee.libelle },
+      bulletins: bulletins.map((b) => ({
+        inscriptionId: b.idInscription,
+        matricule: b.inscription.eleve.matricule,
+        nom: `${b.inscription.eleve.nom} ${b.inscription.eleve.postnom ?? ''} ${b.inscription.eleve.prenom}`.trim(),
+        classe: b.inscription.classe.libelle,
+        totalObtenu: Number(b.totalObtenu),
+        totalMaximum: Number(b.totalMaximum),
+        pourcentage: Number(b.pourcentage),
+        rang: b.rang,
+        decision: b.decision,
+      })),
+    };
+  }
+
+  /** Bulletin détaillé d'un élève pour un semestre (matières, notes, coefficients). */
+  async inscriptionBulletinDetail(inscriptionId: string, semestreId: string) {
+    const [data, inscription, semestre, stored] = await Promise.all([
+      this.computeSemestreBulletin(semestreId, inscriptionId),
+      this.prisma.inscription.findUnique({ where: { id: inscriptionId }, include: { eleve: true, classe: { include: { option: { include: { section: true } } } }, annee: true } }),
+      this.prisma.semestre.findUnique({ where: { id: semestreId }, include: { annee: true } }),
+      this.prisma.bulletin.findFirst({ where: { idInscription: inscriptionId, idSemestre: semestreId, type: TypeBulletin.SEMESTRE } }),
+    ]);
+    if (!inscription || !semestre) throw new NotFoundException('Inscription ou semestre introuvable');
+
+    return {
+      semestre: { libelle: semestre.libelle, annee: semestre.annee.libelle },
+      eleve: {
+        matricule: inscription.eleve.matricule,
+        nom: inscription.eleve.nom,
+        postnom: inscription.eleve.postnom,
+        prenom: inscription.eleve.prenom,
+        classe: inscription.classe.libelle,
+        option: inscription.classe.option.libelle,
+        section: inscription.classe.option.section.libelle,
+      },
+      lignes: data.lignes,
+      totalObtenu: data.totalObtenu,
+      totalMaximum: data.totalMaximum,
+      pourcentage: data.pourcentage,
+      rang: stored?.rang ?? null,
+      decision: stored?.decision ?? null,
+    };
+  }
+
+  // ------------------------------------------------------------------
   // Helpers
   // ------------------------------------------------------------------
 
