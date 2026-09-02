@@ -768,6 +768,75 @@ async function main() {
   }
   console.log(`   ✔️ ${bulletinsToInsert.length} bulletins générés et publiés pour S1 et S2 !`);
 
+  // ----------------------------------------------------
+  // 13. BULLETINS ANNUELS (S1 + S2 combinés — EPSP Congo)
+  // ----------------------------------------------------
+  console.log('🎓 13. Génération des bulletins annuels (S1 + S2 combinés, système EPSP Congo)...');
+
+  // Récupérer les bulletins S1 et S2 depuis les tableaux déjà construits
+  const bulletinsS1 = bulletinsToInsert.filter((b: any) => b.idSemestre === semestre1.id);
+  const bulletinsS2 = bulletinsToInsert.filter((b: any) => b.idSemestre === semestre2.id);
+
+  // Index par inscriptionId
+  const mapS1 = new Map<string, any>(bulletinsS1.map((b: any) => [b.idInscription, b]));
+  const mapS2 = new Map<string, any>(bulletinsS2.map((b: any) => [b.idInscription, b]));
+
+  // Regrouper par classe
+  const annualByClasse = new Map<string, { inscriptionId: string; totalObtenu: number; totalMaximum: number; pourcentage: number; rang?: number }[]>();
+
+  for (const cLibelle of allClasseNames) {
+    const students = inscriptionsByClasse.get(cLibelle) ?? [];
+    const annualList: { inscriptionId: string; totalObtenu: number; totalMaximum: number; pourcentage: number; rang?: number }[] = [];
+
+    for (const studentObj of students) {
+      const bS1 = mapS1.get(studentObj.inscription.id);
+      const bS2 = mapS2.get(studentObj.inscription.id);
+      if (!bS1 || !bS2) continue;
+
+      const totalObtenu = round2(Number(bS1.totalObtenu) + Number(bS2.totalObtenu));
+      const totalMaximum = Number(bS1.totalMaximum) + Number(bS2.totalMaximum);
+      const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);
+      annualList.push({ inscriptionId: studentObj.inscription.id, totalObtenu, totalMaximum, pourcentage });
+    }
+
+    // Classement de la classe
+    annualList.sort((a, b) => b.pourcentage - a.pourcentage);
+    annualList.forEach((c, idx) => { c.rang = idx + 1; });
+    annualByClasse.set(cLibelle, annualList);
+  }
+
+  const getMention = (pct: number): string => {
+    if (pct >= 80) return 'Grande Distinction';
+    if (pct >= 70) return 'Distinction';
+    if (pct >= 60) return 'Satisfaction';
+    if (pct >= 50) return 'Réussi';
+    return 'Non réussi';
+  };
+
+  const annualBulletinsToInsert: any[] = [];
+  for (const annualList of annualByClasse.values()) {
+    for (const c of annualList) {
+      annualBulletinsToInsert.push({
+        id: randomUUID(),
+        type: TypeBulletin.ANNUEL,
+        totalObtenu: new Prisma.Decimal(c.totalObtenu),
+        totalMaximum: new Prisma.Decimal(c.totalMaximum),
+        pourcentage: new Prisma.Decimal(c.pourcentage),
+        rang: c.rang,
+        decision: getMention(c.pourcentage),
+        idInscription: c.inscriptionId,
+        idSemestre: null,
+        idAnnee: annee.id,
+      });
+    }
+  }
+
+  console.log(`   📦 Insertion de ${annualBulletinsToInsert.length} bulletins annuels...`);
+  for (let i = 0; i < annualBulletinsToInsert.length; i += 1000) {
+    await prisma.bulletin.createMany({ data: annualBulletinsToInsert.slice(i, i + 1000) });
+  }
+  console.log(`   ✔️ ${annualBulletinsToInsert.length} bulletins annuels insérés avec rangs et mentions EPSP !`);
+
   console.log('====================================================');
   console.log('✅ SEEDING MASSIF TERMINÉ AVEC SUCCÈS !');
   console.log('====================================================');

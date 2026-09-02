@@ -95,4 +95,18 @@ export class NotesController {
   detail(@Param('inscriptionId') inscriptionId: string, @Param('semestreId') semestreId: string) {
     return this.notes.inscriptionBulletinDetail(inscriptionId, semestreId);
   }
+
+  // --- Bulletin annuel élève ---
+  @Roles(AppRole.STUDENT)
+  @Get('my-annual-bulletin')
+  myAnnualBulletin(@Req() req: { user: { id: string } }) {
+    return this.notes.myAnnualBulletin(req.user.id);
+  }
+
+  // --- Recalcul bulletin annuel (admin / conseil) ---
+  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Post('bulletins/annee/:id/calculer')
+  recalculateAnnuel(@Param('id') id: string) {
+    return this.notes.recalculateAnnuel(id);
+  }
 }

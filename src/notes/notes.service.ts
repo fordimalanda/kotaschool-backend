@@ -17,6 +17,35 @@ type SemestreBulletinData = {
   rang?: number;
 };
 
+type AnnualBulletinLigne = {
+  matiere: string;
+  coefficient: number;
+  noteS1: number;
+  pointsS1: number;
+  maxS1: number;
+  noteS2: number;
+  pointsS2: number;
+  maxS2: number;
+  totalAnnuel: number;
+  maxAnnuel: number;
+  pourcentage: number;
+};
+
+type AnnualBulletinData = {
+  inscriptionId: string;
+  anneeId: string;
+  totalObtenu: number;
+  totalMaximum: number;
+  pourcentage: number;
+  rang?: number;
+  totalEleves: number;
+  mention: string;
+  decision: string;
+  application: string;
+  conduite: string;
+  lignes: AnnualBulletinLigne[];
+};
+
 const EVALUATION_INCLUDE: Prisma.EvaluationInclude = {
   affectation: {
     include: {
@@ -141,8 +170,8 @@ export class NotesService {
     if (!evaluation) throw new NotFoundException('Évaluation introuvable');
     const user = await this.prisma.utilisateur.findUnique({ where: { id: userId } });
     if (!user?.enseignantId || evaluation.affectation.idEnseignant !== user.enseignantId) throw new ForbiddenException('Accès refusé');
-    if (evaluation.statut !== StatutEvaluation.BROUILLON) throw new BadRequestException('Seules les évaluations en brouillon peuvent être modifiées');
 
+    const isValidee = evaluation.statut === StatutEvaluation.VALIDEE;
     const max = Number(evaluation.maximum);
     const clamped = (v: number) => new Prisma.Decimal(Math.max(0, Math.min(max, Math.round(v * 100) / 100)));
 
@@ -157,12 +186,37 @@ export class NotesService {
       ...toSave.map((n) =>
         this.prisma.note.upsert({
           where: { idInscription_idEvaluation: { idInscription: n.idInscription, idEvaluation: dto.idEvaluation } },
-          update: { valeurNote: clamped(n.valeurNote!), observation: n.observation?.trim() || null },
-          create: { idInscription: n.idInscription, idEvaluation: dto.idEvaluation, valeurNote: clamped(n.valeurNote!), observation: n.observation?.trim() || null },
+          update: {
+            valeurNote: clamped(n.valeurNote!),
+            observation: n.observation?.trim() || null,
+            ...(isValidee ? { estValide: true, valideParId: user.id, dateValidation: new Date() } : {}),
+          },
+          create: {
+            idInscription: n.idInscription,
+            idEvaluation: dto.idEvaluation,
+            valeurNote: clamped(n.valeurNote!),
+            observation: n.observation?.trim() || null,
+            estValide: isValidee,
+            ...(isValidee ? { valideParId: user.id, dateValidation: new Date() } : {}),
+          },
         }),
       ),
     ];
-    return this.prisma.$transaction(operations);
+    const res = await this.prisma.$transaction(operations);
+
+    // Si l'évaluation était déjà validée, mettre à jour automatiquement les bulletins semestriels et annuels
+    if (isValidee) {
+      setImmediate(async () => {
+        try {
+          await this.recalculateSemestre(evaluation.idSemestre);
+          await this.recalculateAnnuel(evaluation.affectation.idAnnee);
+        } catch (err) {
+          console.error('Erreur recalcul bulletins:', err);
+        }
+      });
+    }
+
+    return res;
   }
 
   async submitEvaluation(id: string, userId: string) {
@@ -476,6 +530,206 @@ export class NotesService {
       rang: stored?.rang ?? null,
       decision: stored?.decision ?? null,
     };
+  }
+
+  // ------------------------------------------------------------------
+  // Bulletin annuel (combinaison S1 + S2 — réalité congolaise)
+  // ------------------------------------------------------------------
+
+  /**
+   * Calcule le bulletin annuel d'un élève en combinant S1 et S2.
+   * Règles système EPSP / Congo :
+   *  - Note annuelle par matière = (noteS1 + noteS2) / 2  (arrondie à 2 décimales)
+   *  - Pourcentage annuel = totalObtenu / totalMaximum * 100
+   *  - Mention / Degré de satisfaction selon les seuils de l'EPSP :
+   *      >= 80%  → Grande Distinction
+   *      >= 70%  → Distinction
+   *      >= 60%  → Satisfaction
+   *      >= 50%  → Réussi
+   *      < 50%   → Non réussi (Échec)
+   *  - Decision de passage :
+   *      >= 50%  → Passe en classe supérieure
+   *      < 50%   → Double (redouble)
+   *  - Application & conduite (fix seeded, non géré en DB pour l'instant)
+   */
+  async computeAnnualBulletin(anneeId: string, inscriptionId: string): Promise<AnnualBulletinData> {
+    const [inscription, semestres] = await Promise.all([
+      this.prisma.inscription.findUnique({
+        where: { id: inscriptionId },
+        include: { classe: { include: { classeMatieres: { include: { matiere: true } } } } },
+      }),
+      this.prisma.semestre.findMany({ where: { idAnnee: anneeId }, orderBy: { libelle: 'asc' } }),
+    ]);
+    if (!inscription) throw new NotFoundException('Inscription introuvable');
+    if (semestres.length < 2) throw new BadRequestException('Il faut au moins deux semestres pour calculer le bulletin annuel');
+
+    const [s1, s2] = semestres;
+    const [bulS1, bulS2] = await Promise.all([
+      this.computeSemestreBulletin(s1.id, inscriptionId),
+      this.computeSemestreBulletin(s2.id, inscriptionId),
+    ]);
+
+    // Fusionner les lignes par matière
+    const matiereMap = new Map<string, { coef: number; ptS1: number; maxS1: number; ptS2: number; maxS2: number }>();
+    for (const l of bulS1.lignes) {
+      matiereMap.set(l.matiere, { coef: l.coefficient, ptS1: l.noteBulletin, maxS1: l.coefficient * 20, ptS2: 0, maxS2: l.coefficient * 20 });
+    }
+    for (const l of bulS2.lignes) {
+      const existing = matiereMap.get(l.matiere);
+      if (existing) {
+        existing.ptS2 = l.noteBulletin;
+        existing.maxS2 = l.coefficient * 20;
+      } else {
+        matiereMap.set(l.matiere, { coef: l.coefficient, ptS1: 0, maxS1: l.coefficient * 20, ptS2: l.noteBulletin, maxS2: l.coefficient * 20 });
+      }
+    }
+
+    let totalObtenu = 0;
+    let totalMaximum = 0;
+    const lignes: AnnualBulletinLigne[] = [];
+
+    for (const [matiere, d] of matiereMap.entries()) {
+      const totalAnnuel = round2(d.ptS1 + d.ptS2);
+      const maxAnnuel = d.maxS1 + d.maxS2;
+      const pourcentage = maxAnnuel === 0 ? 0 : round2((totalAnnuel / maxAnnuel) * 100);
+      const noteS1 = d.coef === 0 ? 0 : round2(d.ptS1 / d.coef);
+      const noteS2 = d.coef === 0 ? 0 : round2(d.ptS2 / d.coef);
+      totalObtenu += totalAnnuel;
+      totalMaximum += maxAnnuel;
+      lignes.push({ matiere, coefficient: d.coef, noteS1, pointsS1: d.ptS1, maxS1: d.maxS1, noteS2, pointsS2: d.ptS2, maxS2: d.maxS2, totalAnnuel, maxAnnuel, pourcentage });
+    }
+
+    const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);
+
+    // Mention EPSP Congo
+    let mention: string;
+    let decision: string;
+    if (pourcentage >= 80) { mention = 'Grande Distinction'; decision = 'Passe en classe supérieure'; }
+    else if (pourcentage >= 70) { mention = 'Distinction'; decision = 'Passe en classe supérieure'; }
+    else if (pourcentage >= 60) { mention = 'Satisfaction'; decision = 'Passe en classe supérieure'; }
+    else if (pourcentage >= 50) { mention = 'Réussi'; decision = 'Passe en classe supérieure'; }
+    else { mention = 'Non réussi'; decision = 'Double (redouble)'; }
+
+    return {
+      inscriptionId,
+      anneeId,
+      totalObtenu: round2(totalObtenu),
+      totalMaximum,
+      pourcentage,
+      mention,
+      decision,
+      application: 'Bonne',
+      conduite: 'Bonne',
+      totalEleves: 0, // sera rempli lors du recalcul global
+      lignes,
+    };
+  }
+
+  /** Recalcule et stocke les bulletins annuels de toute une année, avec rang. */
+  async recalculateAnnuel(anneeId: string) {
+    const semestres = await this.prisma.semestre.findMany({
+      where: { idAnnee: anneeId },
+      orderBy: { libelle: 'asc' },
+    });
+    if (semestres.length < 2) return;
+
+    const [s1, s2] = semestres;
+    const [bulS1, bulS2] = await Promise.all([
+      this.prisma.bulletin.findMany({ where: { idSemestre: s1.id, type: TypeBulletin.SEMESTRE } }),
+      this.prisma.bulletin.findMany({ where: { idSemestre: s2.id, type: TypeBulletin.SEMESTRE } }),
+    ]);
+
+    const mapS1 = new Map(bulS1.map((b) => [b.idInscription, b]));
+    const mapS2 = new Map(bulS2.map((b) => [b.idInscription, b]));
+
+    const computed: { inscriptionId: string; totalObtenu: number; totalMaximum: number; pourcentage: number; mention: string; rang?: number }[] = [];
+
+    for (const [inscriptionId, b1] of mapS1.entries()) {
+      const b2 = mapS2.get(inscriptionId);
+      if (!b2) continue;
+
+      const totalObtenu = round2(Number(b1.totalObtenu) + Number(b2.totalObtenu));
+      const totalMaximum = Number(b1.totalMaximum) + Number(b2.totalMaximum);
+      const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);
+
+      let mention: string;
+      if (pourcentage >= 80) mention = 'Grande Distinction';
+      else if (pourcentage >= 70) mention = 'Distinction';
+      else if (pourcentage >= 60) mention = 'Satisfaction';
+      else if (pourcentage >= 50) mention = 'Réussi';
+      else mention = 'Non réussi';
+
+      computed.push({ inscriptionId, totalObtenu, totalMaximum, pourcentage, mention });
+    }
+
+    computed.sort((a, b) => b.pourcentage - a.pourcentage);
+    computed.forEach((c, idx) => {
+      c.rang = idx + 1;
+    });
+
+    await this.prisma.bulletin.deleteMany({ where: { idAnnee: anneeId, type: TypeBulletin.ANNUEL } });
+    if (computed.length > 0) {
+      return this.prisma.bulletin.createMany({
+        data: computed.map((c) => ({
+          type: TypeBulletin.ANNUEL,
+          totalObtenu: new Prisma.Decimal(c.totalObtenu),
+          totalMaximum: new Prisma.Decimal(c.totalMaximum),
+          pourcentage: new Prisma.Decimal(c.pourcentage),
+          rang: c.rang,
+          decision: c.mention,
+          idInscription: c.inscriptionId,
+          idSemestre: null,
+          idAnnee: anneeId,
+        })),
+      });
+    }
+  }
+
+  /** Bulletin annuel de l'élève connecté. */
+  async myAnnualBulletin(userId: string) {
+    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, include: { eleve: true } });
+    if (!user?.eleve) throw new ForbiddenException('Aucun élève associé à ce compte');
+
+    const inscription = await this.prisma.inscription.findFirst({
+      where: { matricule: user.eleve.matricule },
+      include: { annee: true, classe: { include: { option: { include: { section: true } } } } },
+      orderBy: { annee: { libelle: 'desc' } },
+    });
+    if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
+
+    const stored = await this.prisma.bulletin.findFirst({
+      where: { idInscription: inscription.id, idAnnee: inscription.idAnnee, type: TypeBulletin.ANNUEL },
+    });
+
+    const totalEleves = await this.prisma.bulletin.count({
+      where: { idAnnee: inscription.idAnnee, type: TypeBulletin.ANNUEL },
+    });
+
+    // Calculer en live les lignes combinées même si le bulletin n'est pas stocké
+    try {
+      const data = await this.computeAnnualBulletin(inscription.idAnnee, inscription.id);
+      data.rang = stored?.rang ?? undefined;
+      data.totalEleves = totalEleves;
+      return {
+        eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
+        classe: inscription.classe.libelle,
+        option: inscription.classe.option.libelle,
+        section: inscription.classe.option.section.libelle,
+        annee: inscription.annee.libelle,
+        bulletin: data,
+        published: !!stored,
+      };
+    } catch {
+      return {
+        eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
+        classe: inscription.classe.libelle,
+        option: inscription.classe.option.libelle,
+        section: inscription.classe.option.section.libelle,
+        annee: inscription.annee.libelle,
+        bulletin: null,
+        published: false,
+      };
+    }
   }
 
   // ------------------------------------------------------------------
