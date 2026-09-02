@@ -6,6 +6,17 @@ import { SaveNotesDto } from './dto/save-notes.dto';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+type SemestreBulletinData = {
+  inscriptionId: string;
+  semestreId: string;
+  lignes: { matiere: string; coefficient: number; note: number; noteBulletin: number }[];
+  totalObtenu: number;
+  totalMaximum: number;
+  pourcentage: number;
+  anneeId: string;
+  rang?: number;
+};
+
 const EVALUATION_INCLUDE = {
   affectation: {
     include: {
@@ -237,7 +248,7 @@ export class NotesService {
   }
 
   /** Détail du bulletin d'un élève : note_bulletin = note_matière × coefficient. */
-  async computeSemestreBulletin(semestreId: string, inscriptionId: string) {
+  async computeSemestreBulletin(semestreId: string, inscriptionId: string): Promise<SemestreBulletinData> {
     const [inscription, semestre] = await Promise.all([
       this.prisma.inscription.findUnique({
         where: { id: inscriptionId },
@@ -274,7 +285,7 @@ export class NotesService {
     });
     if (!semestre) throw new NotFoundException('Semestre introuvable');
 
-    const computed: { inscriptionId: string; pourcentage: number; data: Awaited<ReturnType<NotesService['computeSemestreBulletin']>> }[] = [];
+    const computed: { inscriptionId: string; pourcentage: number; data: SemestreBulletinData }[] = [];
     for (const ins of semestre.annee.inscriptions) {
       const data = await this.computeSemestreBulletin(semestreId, ins.id);
       computed.push({ inscriptionId: ins.id, pourcentage: data.pourcentage, data });
@@ -314,9 +325,10 @@ export class NotesService {
   // Helpers
   // ------------------------------------------------------------------
 
-  private async requireTeacher(userId: string) {
-    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId } });
-    if (!user?.enseignantId) throw new ForbiddenException('Aucun enseignant associé à ce compte');
-    return user;
+  private async requireTeacher(userId: string): Promise<{ id: string; enseignantId: string }> {
+    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, select: { id: true, enseignantId: true } });
+    if (!user) throw new ForbiddenException('Utilisateur introuvable');
+    if (!user.enseignantId) throw new ForbiddenException('Aucun enseignant associé à ce compte');
+    return { id: user.id, enseignantId: user.enseignantId };
   }
 }
