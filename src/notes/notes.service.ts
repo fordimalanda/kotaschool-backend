@@ -141,15 +141,23 @@ export class NotesService {
     const max = Number(evaluation.maximum);
     const clamped = (v: number) => new Prisma.Decimal(Math.max(0, Math.min(max, Math.round(v * 100) / 100)));
 
-    return this.prisma.$transaction(
-      dto.notes.map((n) =>
+    // Une cellule vidée (valeurNote absente) efface la note existante ; les autres sont insérées/mises à jour.
+    const toSave = dto.notes.filter((n) => n.valeurNote !== undefined && n.valeurNote !== null);
+    const toClear = dto.notes.filter((n) => n.valeurNote === undefined || n.valeurNote === null).map((n) => n.idInscription);
+
+    const operations = [
+      ...(toClear.length > 0
+        ? [this.prisma.note.deleteMany({ where: { idEvaluation: dto.idEvaluation, idInscription: { in: toClear } } })]
+        : []),
+      ...toSave.map((n) =>
         this.prisma.note.upsert({
           where: { idInscription_idEvaluation: { idInscription: n.idInscription, idEvaluation: dto.idEvaluation } },
-          update: { valeurNote: clamped(n.valeurNote), observation: n.observation?.trim() || null },
-          create: { idInscription: n.idInscription, idEvaluation: dto.idEvaluation, valeurNote: clamped(n.valeurNote), observation: n.observation?.trim() || null },
+          update: { valeurNote: clamped(n.valeurNote!), observation: n.observation?.trim() || null },
+          create: { idInscription: n.idInscription, idEvaluation: dto.idEvaluation, valeurNote: clamped(n.valeurNote!), observation: n.observation?.trim() || null },
         }),
       ),
-    );
+    ];
+    return this.prisma.$transaction(operations);
   }
 
   async submitEvaluation(id: string, userId: string) {

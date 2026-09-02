@@ -3,7 +3,7 @@ import { ArrayMinSize, IsArray, IsNumber, IsOptional, IsString, Min, ValidateNes
 
 export class NoteRowDto {
   @IsString() idInscription!: string;
-  @IsNumber() @Min(0) valeurNote!: number;
+  @IsOptional() @IsNumber() @Min(0) valeurNote?: number;
   @IsOptional() @IsString() observation?: string;
 }
 
