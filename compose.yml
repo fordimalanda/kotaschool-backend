@@ -18,7 +18,7 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql://kotaschool:kotaschool@postgres:5432/kotaschool?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      JWT_SECRET: ${JWT_SECRET:-kotaschool_jwt_secret}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       PORT: 4000
     ports:
