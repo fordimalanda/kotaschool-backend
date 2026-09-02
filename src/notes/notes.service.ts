@@ -378,7 +378,8 @@ export class NotesService {
     ]);
 
     const bulletinBySem = new Map(bulletins.map((b) => [b.idSemestre, b]));
-    const semestersView = semestres.map((s) => {
+    const semestersView = [];
+    for (const s of semestres) {
       const resultats = notes
         .filter((n) => n.evaluation.idSemestre === s.id)
         .map((n) => ({
@@ -392,13 +393,21 @@ export class NotesService {
           estValide: n.estValide,
         }));
       const bul = bulletinBySem.get(s.id);
-      return {
+      let lignes: SemestreBulletinData['lignes'] = [];
+      if (bul) {
+        try {
+          lignes = (await this.computeSemestreBulletin(s.id, inscription.id)).lignes;
+        } catch {
+          lignes = [];
+        }
+      }
+      semestersView.push({
         id: s.id,
         libelle: s.libelle,
         resultats,
-        bulletin: bul ? { totalObtenu: Number(bul.totalObtenu), totalMaximum: Number(bul.totalMaximum), pourcentage: Number(bul.pourcentage), rang: bul.rang, decision: bul.decision } : null,
-      };
-    });
+        bulletin: bul ? { totalObtenu: Number(bul.totalObtenu), totalMaximum: Number(bul.totalMaximum), pourcentage: Number(bul.pourcentage), rang: bul.rang, decision: bul.decision, lignes } : null,
+      });
+    }
 
     return {
       eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
