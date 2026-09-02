@@ -1,5 +1,6 @@
 import { PrismaClient, CodeRole, Sexe, StatutEvaluation, TypeBulletin, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -131,14 +132,14 @@ async function main() {
     },
   });
 
-  await prisma.periode.create({
+  const p3 = await prisma.periode.create({
     data: {
       libelle: 'Troisième Période - P3',
       idSemestre: semestre2.id,
     },
   });
 
-  await prisma.periode.create({
+  const p4 = await prisma.periode.create({
     data: {
       libelle: 'Quatrième Période - P4',
       idSemestre: semestre2.id,
@@ -558,14 +559,29 @@ async function main() {
   console.log(`   ✔️ ${matriculeCounter - 1} élèves créés avec succès et inscrits sur l'ensemble des 12 classes !`);
 
   // ----------------------------------------------------
-  // 11. ÉVALUATIONS ET NOTES RÉALISTES POUR PLUSIEURS CLASSES
+  // 11. ÉVALUATIONS ET NOTES POUR TOUTES LES CLASSES (SEMESTRE 1 & SEMESTRE 2)
   // ----------------------------------------------------
-  console.log('✍️ 11. Génération des évaluations et notes réalistes (P1 & Examens)...');
+  console.log('✍️ 11. Génération complète des évaluations et notes (S1: P1 & P2, S2: P3 & P4) pour les 12 classes...');
 
-  // Classes à noter en priorité pour des démonstrations complètes :
-  const classesToGrade = ['4ème Math-Physique', '4ème Commerciale', '4ème Chimie-Biologie', '3ème Math-Physique'];
+  // Configuration des évaluations par semestre et période
+  const evalConfigs = [
+    // SEMESTRE 1
+    { semestre: semestre1, periode: p1, typeLib: 'Interrogation', suffix: 'P1 - Interrogation 1', pond: 1, date: new Date('2026-10-15') },
+    { semestre: semestre1, periode: p1, typeLib: 'Travail Pratique', suffix: 'P1 - TP 1', pond: 1, date: new Date('2026-10-28') },
+    { semestre: semestre1, periode: p2, typeLib: 'Interrogation', suffix: 'P2 - Interrogation 1', pond: 1, date: new Date('2026-12-10') },
+    // SEMESTRE 2
+    { semestre: semestre2, periode: p3, typeLib: 'Interrogation', suffix: 'P3 - Interrogation 1', pond: 1, date: new Date('2027-02-15') },
+    { semestre: semestre2, periode: p3, typeLib: 'Travail Pratique', suffix: 'P3 - TP 1', pond: 1, date: new Date('2027-03-01') },
+    { semestre: semestre2, periode: p4, typeLib: 'Interrogation', suffix: 'P4 - Interrogation 1', pond: 1, date: new Date('2027-05-15') },
+  ];
 
-  for (const cLibelle of classesToGrade) {
+  // Notes de base réparties pour les 17 élèves d'une classe pour créer des moyennes et classements réalistes
+  const baseStudentGrades = [17.8, 16.9, 16.1, 15.4, 14.8, 14.2, 13.6, 13.0, 12.5, 11.9, 11.3, 10.8, 10.2, 9.6, 9.0, 8.4, 7.8];
+
+  const allNotesToInsert: any[] = [];
+  const evaluationsBySemAndClasse = new Map<string, any[]>(); // key: `${semestreId}_${classeLibelle}`
+
+  for (const cLibelle of allClasseNames) {
     const students = inscriptionsByClasse.get(cLibelle) ?? [];
     const cl = classesMap.get(cLibelle);
     const cms = await prisma.classeMatiere.findMany({
@@ -577,149 +593,160 @@ async function main() {
       const aff = affectationsMap.get(`${cLibelle}_${cm.matiere.libelle}`);
       if (!aff) continue;
 
-      // 1ère Évaluation : Interrogation
-      const eval1 = await prisma.evaluation.create({
-        data: {
-          libelle: `Interrogation 1 - ${cm.matiere.libelle}`,
-          idAffectation: aff.id,
-          idPeriode: p1.id,
-          idSemestre: semestre1.id,
-          idTypeEvaluation: typesEvalMap.get('Interrogation').id,
-          maximum: new Prisma.Decimal(20),
-          ponderation: new Prisma.Decimal(1),
-          dateEvaluation: new Date('2026-10-10'),
-          statut: StatutEvaluation.VALIDEE,
-        },
-      });
+      let cfgIdx = 0;
+      for (const cfg of evalConfigs) {
+        cfgIdx++;
+        const typeLibelle = cfg.typeLib === 'Travail Pratique' && cLibelle.includes('Commerciale') ? 'Devoir' : cfg.typeLib;
+        const typeEval = typesEvalMap.get(typeLibelle) ?? typesEvalMap.get('Interrogation');
 
-      // 2ème Évaluation : Travail Pratique ou Devoir
-      const isScientific = cLibelle.includes('Scientifique') || cLibelle.includes('Math') || cLibelle.includes('Chimie');
-      const typeLib = isScientific ? 'Travail Pratique' : 'Devoir';
-      const eval2 = await prisma.evaluation.create({
-        data: {
-          libelle: `${typeLib} 1 - ${cm.matiere.libelle}`,
-          idAffectation: aff.id,
-          idPeriode: p1.id,
-          idSemestre: semestre1.id,
-          idTypeEvaluation: typesEvalMap.get(typeLib).id,
-          maximum: new Prisma.Decimal(20),
-          ponderation: new Prisma.Decimal(1),
-          dateEvaluation: new Date('2026-10-24'),
-          statut: StatutEvaluation.VALIDEE,
-        },
-      });
-
-      // Notes des élèves avec une répartition gaussienne réaliste (notes entre 8 et 19)
-      for (let sIdx = 0; sIdx < students.length; sIdx++) {
-        const studentObj = students[sIdx];
-        const baseNote = 10 + ((sIdx * 7 + cm.matiere.libelle.length) % 9); // note entre 10 et 18
-        const note1Val = Math.min(19.5, Math.max(7.5, round2(baseNote + ((sIdx % 3) - 1) * 1.5)));
-        const note2Val = Math.min(20, Math.max(8, round2(baseNote + ((sIdx % 4) - 1.5))));
-
-        await prisma.note.create({
+        const evaluation = await prisma.evaluation.create({
           data: {
-            valeurNote: new Prisma.Decimal(note1Val),
-            observation: note1Val >= 16 ? 'Très bien' : note1Val >= 12 ? 'Bien' : 'Passable',
+            libelle: `${cm.matiere.libelle} (${cfg.suffix})`,
+            idAffectation: aff.id,
+            idPeriode: cfg.periode.id,
+            idSemestre: cfg.semestre.id,
+            idTypeEvaluation: typeEval.id,
+            maximum: new Prisma.Decimal(20),
+            ponderation: new Prisma.Decimal(cfg.pond),
+            dateEvaluation: cfg.date,
+            statut: StatutEvaluation.VALIDEE,
+          },
+        });
+
+        const semClassKey = `${cfg.semestre.id}_${cLibelle}`;
+        if (!evaluationsBySemAndClasse.has(semClassKey)) {
+          evaluationsBySemAndClasse.set(semClassKey, []);
+        }
+        evaluationsBySemAndClasse.get(semClassKey)!.push({ evaluation, cm, aff, periodeId: cfg.periode.id, pond: cfg.pond });
+
+        for (let sIdx = 0; sIdx < students.length; sIdx++) {
+          const studentObj = students[sIdx];
+          const base = baseStudentGrades[sIdx % baseStudentGrades.length];
+          const subjectVariation = ((cm.matiere.libelle.length * 5 + sIdx * 3 + cfgIdx * 7) % 7) * 0.5 - 1.5;
+          const evalVariation = ((cfgIdx * 3 + sIdx) % 5) * 0.4 - 0.8;
+          const finalNote = Math.min(20, Math.max(6.5, round2(base + subjectVariation + evalVariation)));
+
+          allNotesToInsert.push({
+            id: randomUUID(),
+            valeurNote: new Prisma.Decimal(finalNote),
+            observation: finalNote >= 16 ? 'Très bien' : finalNote >= 12 ? 'Bien' : finalNote >= 10 ? 'Passable' : 'Insuffisant',
             estValide: true,
             valideParId: adminUser.id,
             dateValidation: new Date(),
             idInscription: studentObj.inscription.id,
-            idEvaluation: eval1.id,
-          },
-        });
-
-        await prisma.note.create({
-          data: {
-            valeurNote: new Prisma.Decimal(note2Val),
-            observation: note2Val >= 16 ? 'Excellent' : note2Val >= 12 ? 'Assez bien' : 'Effort nécessaire',
-            estValide: true,
-            valideParId: adminUser.id,
-            dateValidation: new Date(),
-            idInscription: studentObj.inscription.id,
-            idEvaluation: eval2.id,
-          },
-        });
+            idEvaluation: evaluation.id,
+          });
+        }
       }
     }
   }
 
+  // Insertion par lots des notes pour une vitesse maximale
+  console.log(`   📦 Insertion par lots de ${allNotesToInsert.length} notes validées...`);
+  const batchSize = 2000;
+  for (let i = 0; i < allNotesToInsert.length; i += batchSize) {
+    const chunk = allNotesToInsert.slice(i, i + batchSize);
+    await prisma.note.createMany({ data: chunk });
+  }
+  console.log(`   ✔️ ${allNotesToInsert.length} notes insérées avec succès !`);
+
   // ----------------------------------------------------
-  // 12. CALCUL ET GÉNÉRATION AUTOMATIQUE DES BULLETINS (SEMESTRE 1)
+  // 12. CALCUL ET GÉNÉRATION AUTOMATIQUE DES BULLETINS (SEMESTRE 1 & SEMESTRE 2)
   // ----------------------------------------------------
-  console.log('🏆 12. Calcul automatique des bulletins et classements du Semestre 1...');
+  console.log('🏆 12. Calcul automatique et publication des bulletins semestriels (S1 & S2) pour toutes les classes...');
 
-  for (const cLibelle of classesToGrade) {
-    const students = inscriptionsByClasse.get(cLibelle) ?? [];
-    const cl = classesMap.get(cLibelle);
-    const classeMatieres = await prisma.classeMatiere.findMany({
-      where: { idClasse: cl.id },
-      include: { matiere: true },
-    });
+  const semestresToProcess = [
+    { sem: semestre1, periodes: [p1.id, p2.id] },
+    { sem: semestre2, periodes: [p3.id, p4.id] },
+  ];
 
-    const computedBulletins: {
-      inscriptionId: string;
-      totalObtenu: number;
-      totalMaximum: number;
-      pourcentage: number;
-      rang?: number;
-    }[] = [];
+  const bulletinsToInsert: any[] = [];
 
-    for (const studentObj of students) {
-      let totalObtenu = 0;
-      let totalMaximum = 0;
+  // Mettre les notes insérées en cache mémoire pour calculer les bulletins instantanément
+  const notesCache = new Map<string, number>();
+  for (const n of allNotesToInsert) {
+    notesCache.set(`${n.idInscription}_${n.idEvaluation}`, Number(n.valeurNote));
+  }
 
-      for (const cm of classeMatieres) {
-        const affectation = affectationsMap.get(`${cLibelle}_${cm.matiere.libelle}`);
-        if (!affectation) continue;
+  for (const { sem, periodes } of semestresToProcess) {
+    for (const cLibelle of allClasseNames) {
+      const students = inscriptionsByClasse.get(cLibelle) ?? [];
+      const cl = classesMap.get(cLibelle);
+      const cms = await prisma.classeMatiere.findMany({
+        where: { idClasse: cl.id },
+        include: { matiere: true },
+      });
 
-        const evals = await prisma.evaluation.findMany({
-          where: { idAffectation: affectation.id, idPeriode: p1.id, statut: StatutEvaluation.VALIDEE },
-        });
-        if (evals.length === 0) continue;
+      const semClassKey = `${sem.id}_${cLibelle}`;
+      const evalsForClassSem = evaluationsBySemAndClasse.get(semClassKey) ?? [];
 
-        const evalIds = evals.map((e) => e.id);
-        const notes = await prisma.note.findMany({
-          where: { idEvaluation: { in: evalIds }, idInscription: studentObj.inscription.id, estValide: true },
-        });
-        const noteMap = new Map(notes.map((n) => [n.idEvaluation, n]));
-
-        let sumWeighted = 0;
-        let sumWeights = 0;
-        for (const ev of evals) {
-          const n = noteMap.get(ev.id);
-          if (!n) continue;
-          const on20 = (Number(n.valeurNote) / Number(ev.maximum)) * 20;
-          const w = Number(ev.ponderation);
-          sumWeighted += on20 * w;
-          sumWeights += w;
-        }
-
-        const noteMatiere = sumWeights === 0 ? 0 : round2(sumWeighted / sumWeights);
-        const coefficient = Number(cm.coefficient);
-        const noteBulletin = round2(noteMatiere * coefficient);
-
-        totalObtenu += noteBulletin;
-        totalMaximum += coefficient * 20;
+      const evalsByCm = new Map<string, any[]>();
+      for (const item of evalsForClassSem) {
+        if (!evalsByCm.has(item.cm.id)) evalsByCm.set(item.cm.id, []);
+        evalsByCm.get(item.cm.id)!.push(item);
       }
 
-      const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);
-      computedBulletins.push({
-        inscriptionId: studentObj.inscription.id,
-        totalObtenu: round2(totalObtenu),
-        totalMaximum,
-        pourcentage,
+      const computedBulletins: {
+        inscriptionId: string;
+        totalObtenu: number;
+        totalMaximum: number;
+        pourcentage: number;
+        rang?: number;
+      }[] = [];
+
+      for (const studentObj of students) {
+        let totalObtenu = 0;
+        let totalMaximum = 0;
+
+        for (const cm of cms) {
+          const evals = evalsByCm.get(cm.id) ?? [];
+          if (evals.length === 0) continue;
+
+          let sumPeriodes = 0;
+          let countEvaluatedPeriodes = 0;
+
+          for (const pId of periodes) {
+            const pEvals = evals.filter((e) => e.periodeId === pId);
+            if (pEvals.length === 0) continue;
+
+            let sumWeighted = 0;
+            let sumWeights = 0;
+            for (const ev of pEvals) {
+              const noteVal = notesCache.get(`${studentObj.inscription.id}_${ev.evaluation.id}`) ?? 10;
+              sumWeighted += noteVal * ev.pond;
+              sumWeights += ev.pond;
+            }
+            const notePeriode = sumWeights === 0 ? 0 : round2(sumWeighted / sumWeights);
+            sumPeriodes += notePeriode;
+            countEvaluatedPeriodes += 1;
+          }
+
+          const noteMatiere = countEvaluatedPeriodes === 0 ? 0 : round2(sumPeriodes / countEvaluatedPeriodes);
+          const coefficient = Number(cm.coefficient);
+          const noteBulletin = round2(noteMatiere * coefficient);
+
+          totalObtenu += noteBulletin;
+          totalMaximum += coefficient * 20;
+        }
+
+        const pourcentage = totalMaximum === 0 ? 0 : round2((totalObtenu / totalMaximum) * 100);
+        computedBulletins.push({
+          inscriptionId: studentObj.inscription.id,
+          totalObtenu: round2(totalObtenu),
+          totalMaximum,
+          pourcentage,
+        });
+      }
+
+      // Classement de la classe
+      computedBulletins.sort((a, b) => b.pourcentage - a.pourcentage);
+      computedBulletins.forEach((c, idx) => {
+        c.rang = idx + 1;
       });
-    }
 
-    // Classement décroissant par classe
-    computedBulletins.sort((a, b) => b.pourcentage - a.pourcentage);
-    computedBulletins.forEach((c, idx) => {
-      c.rang = idx + 1;
-    });
-
-    for (const c of computedBulletins) {
-      await prisma.bulletin.create({
-        data: {
+      for (const c of computedBulletins) {
+        bulletinsToInsert.push({
+          id: randomUUID(),
           type: TypeBulletin.SEMESTRE,
           totalObtenu: new Prisma.Decimal(c.totalObtenu),
           totalMaximum: new Prisma.Decimal(c.totalMaximum),
@@ -727,12 +754,19 @@ async function main() {
           rang: c.rang,
           decision: c.pourcentage >= 50 ? 'Réussi' : 'Non réussi',
           idInscription: c.inscriptionId,
-          idSemestre: semestre1.id,
+          idSemestre: sem.id,
           idAnnee: annee.id,
-        },
-      });
+        });
+      }
     }
   }
+
+  console.log(`   📦 Insertion par lots de ${bulletinsToInsert.length} bulletins calculés...`);
+  for (let i = 0; i < bulletinsToInsert.length; i += 1000) {
+    const chunk = bulletinsToInsert.slice(i, i + 1000);
+    await prisma.bulletin.createMany({ data: chunk });
+  }
+  console.log(`   ✔️ ${bulletinsToInsert.length} bulletins générés et publiés pour S1 et S2 !`);
 
   console.log('====================================================');
   console.log('✅ SEEDING MASSIF TERMINÉ AVEC SUCCÈS !');
