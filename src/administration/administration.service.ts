@@ -51,7 +51,10 @@ export class AdministrationService {
   async listStudents() {
     return this.prisma.eleve.findMany({
       where: { estActif: true },
-      include: { inscriptions: { include: { annee: true, classe: true }, orderBy: { annee: { libelle: 'desc' } } } },
+      include: {
+        inscriptions: { include: { annee: true, classe: true }, orderBy: { annee: { libelle: 'desc' } } },
+        utilisateur: { select: { email: true } },
+      },
       orderBy: { nom: 'asc' },
     });
   }

@@ -459,6 +459,7 @@ async function main() {
   ];
 
   let matriculeCounter = 1;
+  const usedStudentEmails = new Set<string>();
   const inscriptionsByClasse = new Map<string, any[]>();
   const allInscriptionsMap = new Map<string, any>(); // key = matricule
 
@@ -469,12 +470,40 @@ async function main() {
 
     for (let j = 0; j < countForClass; j++) {
       const matricule = `KOT-2026-${String(matriculeCounter).padStart(3, '0')}`;
-      const isM = (matriculeCounter % 2 === 1);
-      const sexe = isM ? Sexe.M : Sexe.F;
-      const prenom = isM ? firstnamesM[(matriculeCounter + j) % firstnamesM.length] : firstnamesF[(matriculeCounter + j) % firstnamesF.length];
-      const nom = congoleseNoms[(matriculeCounter * 3 + j) % congoleseNoms.length];
-      const postnom = congolesePostnoms[(matriculeCounter * 2 + j) % congolesePostnoms.length];
-      const email = `${sanitize(prenom)}.${sanitize(nom)}.${matricule.toLowerCase()}@student.kotaschool.cd`;
+      let nom: string;
+      let postnom: string;
+      let prenom: string;
+      let sexe: Sexe;
+
+      if (matriculeCounter === 1) {
+        // Cas d'exemple explicite demandé par l'utilisateur
+        nom = 'BEYA';
+        postnom = 'MBOMBO';
+        prenom = 'Gloria';
+        sexe = Sexe.F;
+      } else {
+        const isM = (matriculeCounter % 2 === 1);
+        sexe = isM ? Sexe.M : Sexe.F;
+        prenom = isM ? firstnamesM[(matriculeCounter + j) % firstnamesM.length] : firstnamesF[(matriculeCounter + j) % firstnamesF.length];
+        nom = congoleseNoms[(matriculeCounter * 3 + j) % congoleseNoms.length];
+        postnom = congolesePostnoms[(matriculeCounter * 2 + j) % congolesePostnoms.length];
+      }
+
+      // Format d'email simplifié et intuitif: nom.postnom.prenom@kotaschool.cd
+      const postSanitized = postnom ? sanitize(postnom) : '';
+      const baseEmail = postSanitized
+        ? `${sanitize(nom)}.${postSanitized}.${sanitize(prenom)}@kotaschool.cd`
+        : `${sanitize(nom)}.${sanitize(prenom)}@kotaschool.cd`;
+
+      let email = baseEmail;
+      let cIdx = 2;
+      while (usedStudentEmails.has(email)) {
+        email = postSanitized
+          ? `${sanitize(nom)}.${postSanitized}.${sanitize(prenom)}${cIdx}@kotaschool.cd`
+          : `${sanitize(nom)}.${sanitize(prenom)}${cIdx}@kotaschool.cd`;
+        cIdx++;
+      }
+      usedStudentEmails.add(email);
 
       // Année de naissance réaliste selon le niveau (1ère = ~15 ans, 4ème = ~18 ans)
       const niveauOffset = classeLibelle.startsWith('1ère') ? 3 : classeLibelle.startsWith('2ème') ? 2 : classeLibelle.startsWith('3ème') ? 1 : 0;
