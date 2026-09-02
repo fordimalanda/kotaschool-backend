@@ -12,6 +12,7 @@ enum CodeRole {
   TEACHER
   SECRETARY
   PEDAGOGICAL_COUNCIL
+  STUDENT
 }
 
 enum Sexe {
@@ -42,13 +43,16 @@ model Role {
 model Utilisateur {
   id String @id @default(uuid()) @map("idUtilisateur")
   nomUtilisateur String @unique
+  email String? @unique
   motDePasse String
   estActif Boolean @default(true)
   supprimeLe DateTime?
   idRole String
   enseignantId String? @unique
+  eleveId String? @unique
   role Role @relation(fields: [idRole], references: [id])
   enseignant Enseignant? @relation(fields: [enseignantId], references: [id])
+  eleve Eleve? @relation(fields: [eleveId], references: [matricule])
   notesValidees Note[] @relation("Validateur")
   creeLe DateTime @default(now())
   modifieLe DateTime @updatedAt
@@ -99,6 +103,7 @@ model Eleve {
   estActif Boolean @default(true)
   supprimeLe DateTime?
   inscriptions Inscription[]
+  utilisateur Utilisateur?
   @@map("eleves")
 }
 
