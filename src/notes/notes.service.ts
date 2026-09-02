@@ -59,7 +59,6 @@ export class NotesService {
           semestre: { include: { annee: true } },
           typeEvaluation: true,
         },
-        _count: { select: { notes: true } },
         orderBy: { dateEvaluation: 'desc' },
       }),
     ]);
@@ -190,7 +189,6 @@ export class NotesService {
         semestre: { include: { annee: true } },
         typeEvaluation: true,
       },
-      _count: { select: { notes: true } },
       orderBy: { dateEvaluation: 'asc' },
     });
   }
