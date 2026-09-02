@@ -9,7 +9,7 @@
     "start:prod": "node dist/main",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:seed": "node --env-file=.env --import tsx prisma/seed.ts",
     "lint": "eslint \"{src,prisma}/**/*.ts\" --fix"
   },
   "dependencies": {

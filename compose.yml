@@ -6,7 +6,8 @@ services:
       POSTGRES_PASSWORD: kotaschool
       POSTGRES_DB: kotaschool
     ports:
-      - "5432:5432"
+      # Port hôte 5433 (et non 5432) : le PostgreSQL local (service Windows) occupe déjà 5432.
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
