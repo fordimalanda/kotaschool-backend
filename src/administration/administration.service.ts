@@ -16,4 +16,31 @@ export class AdministrationService {
   async affecter(data: { idEnseignant: string; idClasseMatiere: string; idAnnee: string }) { return this.prisma.affectation.upsert({ where: { idEnseignant_idClasseMatiere_idAnnee: data }, update: {}, create: data }); }
   async inscrire(data: { matricule: string; idClasse: string; idAnnee: string }) { return this.prisma.inscription.upsert({ where: { matricule_idAnnee: { matricule: data.matricule, idAnnee: data.idAnnee } }, update: { idClasse: data.idClasse }, create: data }); }
   async teacherAssignments(userId: string) { const user = await this.prisma.utilisateur.findUnique({ where: { id: userId } }); if (!user?.enseignantId) throw new NotFoundException('Aucun enseignant associé à ce compte'); return this.prisma.affectation.findMany({ where: { idEnseignant: user.enseignantId }, include: { annee: true, classeMatiere: { include: { classe: true, matiere: true } } } }); }
+
+  // --- Lectures pour les écrans d'administration ---
+  async listStudents() {
+    return this.prisma.eleve.findMany({
+      where: { estActif: true },
+      include: { inscriptions: { include: { annee: true, classe: true }, orderBy: { annee: { libelle: 'desc' } } } },
+      orderBy: { nom: 'asc' },
+    });
+  }
+
+  async listAssignments() {
+    return this.prisma.affectation.findMany({
+      include: {
+        enseignant: { select: { nom: true, postnom: true, prenom: true } },
+        annee: true,
+        classeMatiere: { include: { classe: { include: { option: { include: { section: true } } } }, matiere: true } },
+      },
+      orderBy: { annee: { libelle: 'desc' } },
+    });
+  }
+
+  async listClassSubjects() {
+    return this.prisma.classeMatiere.findMany({
+      include: { classe: { include: { option: { include: { section: true } } } }, matiere: true },
+      orderBy: [{ classe: { libelle: 'asc' } }, { matiere: { libelle: 'asc' } }],
+    });
+  }
 }

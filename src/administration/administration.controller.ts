@@ -29,5 +29,8 @@ export class AdministrationController {
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('class-subjects') classSubject(@Body() dto: ClasseMatiereDto) { return this.service.addClasseMatiere(dto); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('assignments') assignment(@Body() dto: AffectationDto) { return this.service.affecter(dto); }
   @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('enrolments') enrolment(@Body() dto: InscriptionDto) { return this.service.inscrire(dto); }
-  @Roles(AppRole.TEACHER) @Get('my-assignments') assignments(@Req() req: { user: { id: string } }) { return this.service.teacherAssignments(req.user.id); }
+  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Get('students') students() { return this.service.listStudents(); }
+  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Get('assignments') assignments() { return this.service.listAssignments(); }
+  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Get('class-subjects') classSubjects() { return this.service.listClassSubjects(); }
+  @Roles(AppRole.TEACHER) @Get('my-assignments') myAssignments(@Req() req: { user: { id: string } }) { return this.service.teacherAssignments(req.user.id); }
 }
