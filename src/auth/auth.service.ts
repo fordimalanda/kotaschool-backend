@@ -1,10 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../database/prisma.service';
 import { LoginDto } from './dto/login.dto';
 
-type LoginUser = Awaited<ReturnType<PrismaService['utilisateur']['findUnique']>>;
+type LoginUser = Prisma.UtilisateurGetPayload<{ include: { role: true; enseignant: true; eleve: true } }>;
 
 @Injectable()
 export class AuthService {
@@ -39,7 +40,7 @@ export class AuthService {
     });
   }
 
-  private displayName(user: NonNullable<LoginUser>): string {
+  private displayName(user: LoginUser): string {
     if (user.enseignant) return `${user.enseignant.nom} ${user.enseignant.prenom}`.trim();
     if (user.eleve) return `${user.eleve.nom} ${user.eleve.prenom}`.trim();
     return user.email ?? user.nomUtilisateur;
