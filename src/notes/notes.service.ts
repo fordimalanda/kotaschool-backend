@@ -756,6 +756,69 @@ export class NotesService {
     });
     if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
 
+    const baseInfo = {
+      eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
+      classe: inscription.classe.libelle,
+      option: inscription.classe.option.libelle,
+      section: inscription.classe.option.section.libelle,
+      annee: inscription.annee.libelle,
+    };
+
+    // Récupérer les semestres de l'année
+    const semestres = await this.prisma.semestre.findMany({
+      where: { idAnnee: inscription.idAnnee },
+      orderBy: { libelle: 'asc' },
+    });
+
+    if (semestres.length < 2) {
+      return { ...baseInfo, bulletin: null, published: false, readyForAnnual: false, missingInfo: 'Il faut au moins deux semestres configurés pour générer le bulletin annuel.' };
+    }
+
+    // Vérifier que toutes les notes de chaque matière existent et sont validées pour les deux semestres
+    // On vérifie que pour chaque affectation de la classe, il existe au moins une note validée dans chaque semestre
+    const classeMatieres = await this.prisma.classeMatiere.findMany({
+      where: { idClasse: inscription.idClasse },
+      include: { matiere: true },
+    });
+
+    const missingItems: string[] = [];
+
+    for (const sem of semestres) {
+      for (const cm of classeMatieres) {
+        const affectation = await this.prisma.affectation.findFirst({
+          where: { idClasseMatiere: cm.id, idAnnee: inscription.idAnnee },
+        });
+        if (!affectation) continue;
+
+        // Vérifier qu'il y a au moins une note validée pour cette matière dans ce semestre
+        const notesCount = await this.prisma.note.count({
+          where: {
+            idInscription: inscription.id,
+            estValide: true,
+            evaluation: {
+              idAffectation: affectation.id,
+              idSemestre: sem.id,
+              statut: StatutEvaluation.VALIDEE,
+            },
+          },
+        });
+
+        if (notesCount === 0) {
+          missingItems.push(`${cm.matiere.libelle} (${sem.libelle})`);
+        }
+      }
+    }
+
+    if (missingItems.length > 0) {
+      return {
+        ...baseInfo,
+        bulletin: null,
+        published: false,
+        readyForAnnual: false,
+        missingInfo: `Des notes manquent encore dans : ${missingItems.slice(0, 5).join(', ')}${missingItems.length > 5 ? ` et ${missingItems.length - 5} autre(s)` : ''}. Le Bulletin Scolaire Annuel sera disponible quand toutes les notes des deux semestres auront été saisies et validées.`,
+      };
+    }
+
     const stored = await this.prisma.bulletin.findFirst({
       where: { idInscription: inscription.id, idAnnee: inscription.idAnnee, type: TypeBulletin.ANNUEL },
     });
@@ -764,29 +827,25 @@ export class NotesService {
       where: { idAnnee: inscription.idAnnee, type: TypeBulletin.ANNUEL },
     });
 
-    // Calculer en live les lignes combinées même si le bulletin n'est pas stocké
+    // Calculer en live les lignes combinées
     try {
       const data = await this.computeAnnualBulletin(inscription.idAnnee, inscription.id);
       data.rang = stored?.rang ?? undefined;
       data.totalEleves = totalEleves;
       return {
-        eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
-        classe: inscription.classe.libelle,
-        option: inscription.classe.option.libelle,
-        section: inscription.classe.option.section.libelle,
-        annee: inscription.annee.libelle,
+        ...baseInfo,
         bulletin: data,
         published: !!stored,
+        readyForAnnual: true,
+        missingInfo: null,
       };
     } catch {
       return {
-        eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
-        classe: inscription.classe.libelle,
-        option: inscription.classe.option.libelle,
-        section: inscription.classe.option.section.libelle,
-        annee: inscription.annee.libelle,
+        ...baseInfo,
         bulletin: null,
         published: false,
+        readyForAnnual: false,
+        missingInfo: 'Impossible de calculer le bulletin annuel pour le moment.',
       };
     }
   }
