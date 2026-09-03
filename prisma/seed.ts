@@ -155,6 +155,12 @@ async function main() {
     data: { libelle: 'Scientifique' },
   });
 
+  // Tronc commun Scientifique (1ère & 2ème) : pas encore de spécialisation
+  const optScientifique = await prisma.option.create({
+    data: { libelle: 'Scientifique', idSection: secScientifique.id },
+  });
+
+  // Filières spécialisées (3ème & 4ème)
   const optMathPhysique = await prisma.option.create({
     data: { libelle: 'Mathématiques–Physique', idSection: secScientifique.id },
   });
@@ -173,9 +179,20 @@ async function main() {
 
   const classesMap = new Map<string, any>();
 
-  const classesMathPhys = [
+  // Tronc commun : 1ère et 2ème Scientifique (option générale Scientifique)
+  const classesScientifique = [
     { libelle: '1ère Scientifique', niveau: '1ère' },
     { libelle: '2ème Scientifique', niveau: '2ème' },
+  ];
+  for (const c of classesScientifique) {
+    const cl = await prisma.classe.create({
+      data: { libelle: c.libelle, niveau: c.niveau, idOption: optScientifique.id },
+    });
+    classesMap.set(c.libelle, cl);
+  }
+
+  // Spécialisation Mathématiques–Physique : 3ème et 4ème seulement
+  const classesMathPhys = [
     { libelle: '3ème Math-Physique', niveau: '3ème' },
     { libelle: '4ème Math-Physique', niveau: '4ème' },
   ];
@@ -186,9 +203,8 @@ async function main() {
     classesMap.set(c.libelle, cl);
   }
 
+  // Spécialisation Chimie-Biologie : 3ème et 4ème seulement
   const classesChimieBio = [
-    { libelle: '1ère Chimie-Biologie', niveau: '1ère' },
-    { libelle: '2ème Chimie-Biologie', niveau: '2ème' },
     { libelle: '3ème Chimie-Biologie', niveau: '3ème' },
     { libelle: '4ème Chimie-Biologie', niveau: '4ème' },
   ];
@@ -255,7 +271,8 @@ async function main() {
     matieresMap.set(libelle, mat);
   }
 
-  const scClasses = [...classesMathPhys, ...classesChimieBio];
+  // Associer les matières scientifiques à TOUTES les classes scientifiques (tronc commun + spécialisées)
+  const scClasses = [...classesScientifique, ...classesMathPhys, ...classesChimieBio];
   for (const scCl of scClasses) {
     const cl = classesMap.get(scCl.libelle);
     for (const m of matieresScientifiques) {
@@ -454,8 +471,13 @@ async function main() {
   const communes = ['Lemba', 'Gombe', 'N\'djili', 'Ngaba', 'Lingwala', 'Bandalungwa', 'Kalamu', 'Limete', 'Kasa-Vubu', 'Mont-Ngafula', 'Barumbu', 'Ngaliema', 'Matonge', 'Kintambo'];
 
   const allClasseNames = [
-    '1ère Scientifique', '2ème Scientifique', '3ème Math-Physique', '4ème Math-Physique',
-    '1ère Chimie-Biologie', '2ème Chimie-Biologie', '3ème Chimie-Biologie', '4ème Chimie-Biologie',
+    // Tronc commun Scientifique (1ère & 2ème)
+    '1ère Scientifique', '2ème Scientifique',
+    // Spécialisation Mathématiques–Physique (3ème & 4ème)
+    '3ème Math-Physique', '4ème Math-Physique',
+    // Spécialisation Chimie-Biologie (3ème & 4ème)
+    '3ème Chimie-Biologie', '4ème Chimie-Biologie',
+    // Section Commerciale et Gestion
     '1ère Commerciale', '2ème Commerciale', '3ème Commerciale', '4ème Commerciale',
   ];
 
@@ -862,7 +884,7 @@ async function main() {
   console.log(`- Administrateur: ${adminEmail} (Mot de passe: MALANDA100)`);
   console.log(`- Enseignants   : ${teachersSeedList.length} créés (Mot de passe: prof)`);
   console.log(`- Élèves        : ${matriculeCounter - 1} créés et inscrits (Mot de passe: student)`);
-  console.log(`- Classes       : 12 classes complètes (1ère à 4ème)`);
+  console.log(`- Classes       : 10 classes (Tronc commun: 2 Scientifique | Math-Physique: 2 | Chimie-Bio: 2 | Commerciale: 4)`);
   console.log(`- Affectations  : ${allClasseMatieres.length} affectations (100% des matières attribuées)`);
   console.log(`- Bulletins     : Pré-calculés avec rangs pour les promotions complètes`);
   console.log('====================================================');
