@@ -39,7 +39,7 @@ src/
 │   ├── jwt-auth.guard.ts          # Vérifie le JWT
 │   ├── roles.guard.ts             # Vérifie les @Roles
 │   ├── roles.decorator.ts
-│   ├── roles.enum.ts              # ADMIN, TEACHER, SECRETARY, PEDAGOGICAL_COUNCIL
+│   ├── roles.enum.ts              # ADMIN, TEACHER, STUDENT
 │   └── dto/login.dto.ts
 ├── administration/                # Structure, acteurs, affectations, inscriptions
 │   ├── administration.controller.ts
@@ -64,7 +64,7 @@ Fichier : [`prisma/schema.prisma`](./prisma/schema.prisma)
 
 | Énum | Valeurs |
 |---|---|
-| `CodeRole` | `ADMIN`, `TEACHER`, `SECRETARY`, `PEDAGOGICAL_COUNCIL` |
+| `CodeRole` | `ADMIN`, `TEACHER`, `STUDENT` |
 | `Sexe` | `M`, `F` |
 | `StatutEvaluation` | `BROUILLON`, `SOUMISE`, `VALIDEE` |
 | `TypeBulletin` | `PERIODE`, `SEMESTRE`, `ANNUEL` |
@@ -117,10 +117,9 @@ Implémentées dans `notes.service.ts`.
 
 | Rôle | Signification |
 |---|---|
-| `ADMIN` | Accès total |
-| `SECRETARY` | Administration (élèves, enseignants, structure, bulletins) |
+| `ADMIN` | Accès total (administration, validation des notes, bulletins) |
 | `TEACHER` | Saisie des notes de ses affectations |
-| `PEDAGOGICAL_COUNCIL` | Validation des notes soumises, bulletins |
+| `STUDENT` | Consultation de ses notes et bulletins |
 
 ---
 
@@ -138,20 +137,20 @@ Implémentées dans `notes.service.ts`.
 | Méthode | Route | Rôles | Description |
 |---|---|---|---|
 | `GET` | `/catalogue` | authentifié | Sections/options/classes, matières, enseignants actifs, années |
-| `GET` | `/students` | `ADMIN`, `SECRETARY` | Liste des élèves + inscriptions |
-| `GET` | `/assignments` | `ADMIN`, `SECRETARY` | Liste des affectations |
-| `GET` | `/class-subjects` | `ADMIN`, `SECRETARY` | Couples classe–matière avec coefficients |
+| `GET` | `/students` | `ADMIN` | Liste des élèves + inscriptions |
+| `GET` | `/assignments` | `ADMIN` | Liste des affectations |
+| `GET` | `/class-subjects` | `ADMIN` | Couples classe–matière avec coefficients |
 | `GET` | `/my-assignments` | `TEACHER` | Affectations de l'enseignant connecté |
-| `POST` | `/teachers` | `ADMIN`, `SECRETARY` | Créer un enseignant |
-| `POST` | `/students` | `ADMIN`, `SECRETARY` | Créer un élève |
-| `POST` | `/sections` | `ADMIN`, `SECRETARY` | Créer une section |
-| `POST` | `/options` | `ADMIN`, `SECRETARY` | Créer une option |
-| `POST` | `/classes` | `ADMIN`, `SECRETARY` | Créer une classe |
-| `POST` | `/subjects` | `ADMIN`, `SECRETARY` | Créer une matière |
+| `POST` | `/teachers` | `ADMIN` | Créer un enseignant |
+| `POST` | `/students` | `ADMIN` | Créer un élève |
+| `POST` | `/sections` | `ADMIN` | Créer une section |
+| `POST` | `/options` | `ADMIN` | Créer une option |
+| `POST` | `/classes` | `ADMIN` | Créer une classe |
+| `POST` | `/subjects` | `ADMIN` | Créer une matière |
 | `POST` | `/academic-years` | `ADMIN` | Créer une année scolaire (activation exclusive) |
-| `POST` | `/class-subjects` | `ADMIN`, `SECRETARY` | Définir le coefficient d'un couple classe–matière |
-| `POST` | `/assignments` | `ADMIN`, `SECRETARY` | Affecter un enseignant |
-| `POST` | `/enrolments` | `ADMIN`, `SECRETARY` | Inscrire un élève pour une année |
+| `POST` | `/class-subjects` | `ADMIN` | Définir le coefficient d'un couple classe–matière |
+| `POST` | `/assignments` | `ADMIN` | Affecter un enseignant |
+| `POST` | `/enrolments` | `ADMIN` | Inscrire un élève pour une année |
 
 ### Notes — `/notes`
 
@@ -161,14 +160,14 @@ Implémentées dans `notes.service.ts`.
 | `POST` | `/evaluations` | `TEACHER` | Créer une évaluation |
 | `POST` | `/batch` | `TEACHER` | Enregistrer la grille de notes (brouillon, upsert ; cellule vide = suppression) |
 | `POST` | `/evaluations/:id/soumettre` | `TEACHER` | Soumettre l'évaluation (→ `SOUMISE`) |
-| `GET` | `/grille/:id` | `TEACHER`, `PEDAGOGICAL_COUNCIL`, `ADMIN` | Grille d'évaluation (élèves + notes) |
-| `GET` | `/validations` | `PEDAGOGICAL_COUNCIL`, `ADMIN` | Évaluations en attente (`SOUMISE`) |
-| `POST` | `/validations/:id/valider` | `PEDAGOGICAL_COUNCIL`, `ADMIN` | Valider et verrouiller (→ `VALIDEE`, `estValide`) |
-| `POST` | `/bulletins/semestre/:id/calculer` | `TEACHER`, `SECRETARY`, `PEDAGOGICAL_COUNCIL`, `ADMIN` | Recalculer les bulletins du semestre + classement |
-| `GET` | `/bulletins/inscription/:id` | idem | Bulletins d'un élève |
-| `GET` | `/reports/semestres` | `SECRETARY`, `PEDAGOGICAL_COUNCIL`, `ADMIN` | Semestres disponibles |
-| `GET` | `/reports/semestre/:id` | idem | Classement de la cohorte |
-| `GET` | `/reports/inscription/:inscriptionId/semestre/:semestreId` | idem | Bulletin détaillé (matières, notes × coefficients) |
+| `GET` | `/grille/:id` | `TEACHER`, `ADMIN` | Grille d'évaluation (élèves + notes) |
+| `GET` | `/validations` | `ADMIN` | Évaluations en attente (`SOUMISE`) |
+| `POST` | `/validations/:id/valider` | `ADMIN` | Valider et verrouiller (→ `VALIDEE`, `estValide`) |
+| `POST` | `/bulletins/semestre/:id/calculer` | `ADMIN` | Recalculer les bulletins du semestre + classement |
+| `GET` | `/bulletins/inscription/:id` | `ADMIN` | Bulletins d'un élève |
+| `GET` | `/reports/semestres` | `ADMIN` | Semestres disponibles |
+| `GET` | `/reports/semestre/:id` | `ADMIN` | Classement de la cohorte |
+| `GET` | `/reports/inscription/:inscriptionId/semestre/:semestreId` | `ADMIN` | Bulletin détaillé (matières, notes × coefficients) |
 
 ---
 

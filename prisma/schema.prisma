@@ -10,8 +10,6 @@ datasource db {
 enum CodeRole {
   ADMIN
   TEACHER
-  SECRETARY
-  PEDAGOGICAL_COUNCIL
   STUDENT
 }
 

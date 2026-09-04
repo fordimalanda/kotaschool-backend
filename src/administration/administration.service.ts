@@ -3,7 +3,7 @@ import { CodeRole, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../database/prisma.service';
 
-const DEFAULT_PASSWORD: Record<CodeRole, string> = { ADMIN: 'admin', TEACHER: 'prof', SECRETARY: 'secretary', PEDAGOGICAL_COUNCIL: 'council', STUDENT: 'student' };
+const DEFAULT_PASSWORD: Record<CodeRole, string> = { ADMIN: 'admin', TEACHER: 'prof', STUDENT: 'student' };
 
 @Injectable()
 export class AdministrationService {

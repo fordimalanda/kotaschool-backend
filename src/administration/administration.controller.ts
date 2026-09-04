@@ -20,19 +20,19 @@ class InscriptionDto { @IsString() matricule!: string; @IsString() idClasse!: st
 export class AdministrationController {
   constructor(private readonly service: AdministrationService) {}
   @Get('catalogue') catalogue() { return this.service.catalogue(); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('teachers') teacher(@Body() dto: TeacherDto) { return this.service.createTeacher(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('students') student(@Body() dto: StudentDto) { return this.service.createStudent(dto); }
+  @Roles(AppRole.ADMIN) @Post('teachers') teacher(@Body() dto: TeacherDto) { return this.service.createTeacher(dto); }
+  @Roles(AppRole.ADMIN) @Post('students') student(@Body() dto: StudentDto) { return this.service.createStudent(dto); }
   @Roles(AppRole.ADMIN) @Post('admins') admin(@Body() dto: AdminDto) { return this.service.createAdmin(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('sections') section(@Body() dto: LabelDto) { return this.service.createSection(dto.libelle); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('options') option(@Body() dto: OptionDto) { return this.service.createOption(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('classes') classe(@Body() dto: ClasseDto) { return this.service.createClasse(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('subjects') subject(@Body() dto: LabelDto) { return this.service.createMatiere(dto.libelle); }
+  @Roles(AppRole.ADMIN) @Post('sections') section(@Body() dto: LabelDto) { return this.service.createSection(dto.libelle); }
+  @Roles(AppRole.ADMIN) @Post('options') option(@Body() dto: OptionDto) { return this.service.createOption(dto); }
+  @Roles(AppRole.ADMIN) @Post('classes') classe(@Body() dto: ClasseDto) { return this.service.createClasse(dto); }
+  @Roles(AppRole.ADMIN) @Post('subjects') subject(@Body() dto: LabelDto) { return this.service.createMatiere(dto.libelle); }
   @Roles(AppRole.ADMIN) @Post('academic-years') annee(@Body() dto: AnneeDto) { return this.service.createAnnee(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('class-subjects') classSubject(@Body() dto: ClasseMatiereDto) { return this.service.addClasseMatiere(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('assignments') assignment(@Body() dto: AffectationDto) { return this.service.affecter(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Post('enrolments') enrolment(@Body() dto: InscriptionDto) { return this.service.inscrire(dto); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Get('students') students() { return this.service.listStudents(); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Get('assignments') assignments() { return this.service.listAssignments(); }
-  @Roles(AppRole.ADMIN, AppRole.SECRETARY) @Get('class-subjects') classSubjects() { return this.service.listClassSubjects(); }
+  @Roles(AppRole.ADMIN) @Post('class-subjects') classSubject(@Body() dto: ClasseMatiereDto) { return this.service.addClasseMatiere(dto); }
+  @Roles(AppRole.ADMIN) @Post('assignments') assignment(@Body() dto: AffectationDto) { return this.service.affecter(dto); }
+  @Roles(AppRole.ADMIN) @Post('enrolments') enrolment(@Body() dto: InscriptionDto) { return this.service.inscrire(dto); }
+  @Roles(AppRole.ADMIN) @Get('students') students() { return this.service.listStudents(); }
+  @Roles(AppRole.ADMIN) @Get('assignments') assignments() { return this.service.listAssignments(); }
+  @Roles(AppRole.ADMIN) @Get('class-subjects') classSubjects() { return this.service.listClassSubjects(); }
   @Roles(AppRole.TEACHER) @Get('my-assignments') myAssignments(@Req() req: { user: { id: string } }) { return this.service.teacherAssignments(req.user.id); }
 }

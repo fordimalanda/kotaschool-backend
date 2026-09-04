@@ -55,8 +55,6 @@ async function main() {
   const roleLibelles: Record<CodeRole, string> = {
     ADMIN: 'Administrateur',
     TEACHER: 'Enseignant',
-    SECRETARY: 'Secrétaire / Administration',
-    PEDAGOGICAL_COUNCIL: 'Conseil pédagogique',
     STUDENT: 'Élève',
   };
 

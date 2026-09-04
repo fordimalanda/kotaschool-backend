@@ -245,7 +245,7 @@ export class NotesService {
   }
 
   // ------------------------------------------------------------------
-  // Conseil pédagogique / Admin : validation
+  // Admin : validation officielle des évaluations soumises
   // ------------------------------------------------------------------
 
   async pendingValidations() {
@@ -441,7 +441,7 @@ export class NotesService {
   }
 
   // ------------------------------------------------------------------
-  // Bulletins / Rapports (consultation par le secrétariat)
+  // Bulletins / Rapports (consultation admin)
   // ------------------------------------------------------------------
 
   // ------------------------------------------------------------------

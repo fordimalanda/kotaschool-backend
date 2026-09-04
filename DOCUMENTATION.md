@@ -35,7 +35,7 @@ Dans de nombreux établissements d'enseignement primaire, secondaire et techniqu
 2. Définition rigoureuse de la structure scolaire (sections, options, classes, matières et coefficients).
 3. Affectation précise des enseignants à leurs charges de cours respectives.
 4. Saisie ergonomique des notes avec enregistrement en brouillon.
-5. Verrouillage et validation stricte par le Conseil Pédagogique.
+5. Verrouillage et validation stricte par l'Administrateur.
 6. Moteur de calcul automatisé des bulletins de période, de semestre et annuels.
 7. Génération de bulletins certifiés au format officiel EPSP (impression A4 et PDF haute fidélité).
 8. Accès en direct pour les élèves et parents à leurs performances scolaires.
@@ -133,26 +133,24 @@ Kotaschool intègre un système complet de sécurité basé sur les rôles (Role
 
 | Rôle Système | Code | Responsabilités & Périmètre d'Action |
 |---|---|---|
-| **Administrateur** | `ADMIN` | Superviseur global. Gestion des comptes utilisateurs, activation de l'année scolaire, création des classes/matières, délibérations et accès sans restriction. |
-| **Secrétaire / Administration** | `SECRETARY` | Gestion quotidienne du registre des élèves, inscriptions annuelles, fiches des enseignants, affectations et impression des palmarès et bulletins. |
-| **Enseignant** | `TEACHER` | Accès restreint à ses propres affectations (classes et matières attribuées). Création d'évaluations, saisie des notes en brouillon et soumission au conseil. |
-| **Conseil Pédagogique** | `PEDAGOGICAL_COUNCIL` | Instance de contrôle académique. Consultation des notes soumises par les enseignants, approbation officielle, verrouillage des notes et validation des délibérations. |
+| **Administrateur** | `ADMIN` | Superviseur global. Gestion des comptes utilisateurs, activation de l'année scolaire, création des classes/matières, administration, validation officielle des notes, délibérations et accès sans restriction. |
+| **Enseignant** | `TEACHER` | Accès restreint à ses propres affectations (classes et matières attribuées). Création d'évaluations, saisie des notes en brouillon et soumission pour validation officielle. |
 | **Élève / Parent** | `STUDENT` | Consultation en temps réel des notes obtenues par période, suivi de progression graphique et téléchargement de ses bulletins officiels certifiés. |
 
 ### 4.1. Matrice des Droits d'Accès aux Écrans
 
-| Route Frontend | Fonctionnalité | `ADMIN` | `SECRETARY` | `TEACHER` | `PEDAGOGICAL_COUNCIL` | `STUDENT` |
-|---|---|:---:|:---:|:---:|:---:|:---:|
-| `/dashboard` | Tableau de bord avec métriques adaptées au rôle | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/students` | Répertoire des élèves & inscriptions annuelles | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `/teachers` | Fiches du corps professoral | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `/academic` | Arbre académique, classes, matières & coefficients | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `/assignments` | Affectation des enseignants aux classes/matières | ✅ | ✅ | ❌ | ❌ | ❌ |
-| `/grades/entry` | Saisie des notes d'évaluations | ❌ | ❌ | ✅ | ❌ | ❌ |
-| `/grades/validation`| Validation et verrouillage officiel des évaluations | ✅ | ❌ | ❌ | ✅ | ❌ |
-| `/reports` | Calcul des délibérations, palmarès & bulletins officiels | ✅ | ✅ | ❌ | ✅ | ❌ |
-| `/grades/my-scores` | Consultation des notes en direct de l'élève | ❌ | ❌ | ❌ | ❌ | ✅ |
-| `/grades/my-notes` | Visualisation et téléchargement des bulletins élève | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Route Frontend | Fonctionnalité | `ADMIN` | `TEACHER` | `STUDENT` |
+|---|---|:---:|:---:|:---:|
+| `/dashboard` | Tableau de bord avec métriques adaptées au rôle | ✅ | ✅ | ✅ |
+| `/students` | Répertoire des élèves & inscriptions annuelles | ✅ | ❌ | ❌ |
+| `/teachers` | Fiches du corps professoral | ✅ | ❌ | ❌ |
+| `/academic` | Arbre académique, classes, matières & coefficients | ✅ | ❌ | ❌ |
+| `/assignments` | Affectation des enseignants aux classes/matières | ✅ | ❌ | ❌ |
+| `/grades/entry` | Saisie des notes d'évaluations | ❌ | ✅ | ❌ |
+| `/grades/validation`| Validation et verrouillage officiel des évaluations | ✅ | ❌ | ❌ |
+| `/reports` | Calcul des délibérations, palmarès & bulletins officiels | ✅ | ❌ | ❌ |
+| `/grades/my-scores` | Consultation des notes en direct de l'élève | ❌ | ❌ | ✅ |
+| `/grades/my-notes` | Visualisation et téléchargement des bulletins élève | ❌ | ❌ | ✅ |
 
 ---
 
@@ -167,13 +165,13 @@ stateDiagram-v2
     [*] --> BROUILLON : Enseignant crée et saisit la grille
     BROUILLON --> BROUILLON : Modifications libres des notes
     BROUILLON --> SOUMISE : Enseignant clique "Soumettre pour validation"
-    SOUMISE --> VALIDEE : Conseil Pédagogique clique "Valider & Verrouiller"
+    SOUMISE --> VALIDEE : Administrateur clique "Valider & Verrouiller"
     VALIDEE --> [*] : Prise en compte dans le calcul des bulletins
 ```
 
 1. **`BROUILLON`** : L'enseignant saisit les notes. Il peut enregistrer, corriger ou laisser des cellules vides sans impacter les moyennes globales.
-2. **`SOUMISE`** : L'enseignant a terminé sa saisie et transmet l'évaluation au Conseil Pédagogique. La grille devient non modifiable pour l'enseignant.
-3. **`VALIDEE`** : Le Conseil Pédagogique vérifie la conformité et valide l'évaluation. La note est estampillée avec `estValide = true`, l'identifiant du validateur et la date exacte. Seules les notes validées entrent dans le calcul des bulletins.
+2. **`SOUMISE`** : L'enseignant a terminé sa saisie et transmet l'évaluation pour validation officielle. La grille devient non modifiable pour l'enseignant.
+3. **`VALIDEE`** : L'Administrateur vérifie la conformité et valide l'évaluation. La note est estampillée avec `estValide = true`, l'identifiant du validateur et la date exacte. Seules les notes validées entrent dans le calcul des bulletins.
 
 ---
 
@@ -294,7 +292,7 @@ erDiagram
 
 #### `Utilisateur` & `Role`
 - `id` (UUID), `nomUtilisateur`, `email`, `motDePasse` (hash bcrypt), `idRole` (Foreign Key vers `Role`), `enseignantId` (nullable), `eleveId` (nullable), `estActif` (booléen).
-- Rôles : `ADMIN`, `SECRETARY`, `TEACHER`, `PEDAGOGICAL_COUNCIL`, `STUDENT`.
+- Rôles : `ADMIN`, `TEACHER`, `STUDENT`.
 
 #### `Section`, `Option` & `Classe`
 - `Section` : regroupe les grandes filières (ex. *Scientifique*, *Commerciale et Gestion*).
@@ -342,13 +340,13 @@ L'API REST est préfixée par `/api/v1` et s'exécute par défaut sur le port `4
 | Méthode | Route | Rôles Autorisés | Description |
 |---|---|---|---|
 | `GET` | `/administration/catalogue` | Tous authentifiés | Retourne l'ensemble de l'arbre académique (sections, options, classes, matières, enseignants). |
-| `GET` | `/administration/students` | `ADMIN`, `SECRETARY` | Liste complète des élèves enregistrés et de leurs inscriptions. |
-| `POST` | `/administration/students` | `ADMIN`, `SECRETARY` | Crée la fiche signalétique d'un nouvel élève avec son matricule. |
-| `POST` | `/administration/enrolments` | `ADMIN`, `SECRETARY` | Inscrit un élève dans une classe pour l'année scolaire active. |
-| `GET` | `/administration/teachers` | `ADMIN`, `SECRETARY` | Liste des enseignants en service. |
-| `POST` | `/administration/teachers` | `ADMIN`, `SECRETARY` | Enregistre un nouvel enseignant et prépare son compte d'accès. |
-| `GET` | `/administration/assignments` | `ADMIN`, `SECRETARY` | Liste de toutes les affectations de l'année. |
-| `POST` | `/administration/assignments` | `ADMIN`, `SECRETARY` | Attribue une charge de cours (classe + matière) à un enseignant. |
+| `GET` | `/administration/students` | `ADMIN` | Liste complète des élèves enregistrés et de leurs inscriptions. |
+| `POST` | `/administration/students` | `ADMIN` | Crée la fiche signalétique d'un nouvel élève avec son matricule. |
+| `POST` | `/administration/enrolments` | `ADMIN` | Inscrit un élève dans une classe pour l'année scolaire active. |
+| `GET` | `/administration/teachers` | `ADMIN` | Liste des enseignants en service. |
+| `POST` | `/administration/teachers` | `ADMIN` | Enregistre un nouvel enseignant et prépare son compte d'accès. |
+| `GET` | `/administration/assignments` | `ADMIN` | Liste de toutes les affectations de l'année. |
+| `POST` | `/administration/assignments` | `ADMIN` | Attribue une charge de cours (classe + matière) à un enseignant. |
 | `GET` | `/administration/my-assignments`| `TEACHER` | Retourne uniquement les affectations de l'enseignant connecté. |
 
 ---
@@ -360,14 +358,14 @@ L'API REST est préfixée par `/api/v1` et s'exécute par défaut sur le port `4
 | `GET` | `/notes/context` | `TEACHER` | Contexte complet de saisie pour l'enseignant (affectations, périodes actives, types d'épreuves). |
 | `POST` | `/notes/evaluations` | `TEACHER` | Crée une nouvelle évaluation en statut `BROUILLON`. |
 | `POST` | `/notes/batch` | `TEACHER` | Enregistrement par lot des notes saisies dans la grille (mode brouillon). |
-| `POST` | `/notes/evaluations/:id/soumettre` | `TEACHER` | Soumet l'évaluation pour validation au Conseil Pédagogique (statut `SOUMISE`). |
-| `GET` | `/notes/grille/:id` | `TEACHER`, `PEDAGOGICAL_COUNCIL`, `ADMIN` | Affiche la grille complète d'une évaluation (élèves, notes et statuts). |
-| `GET` | `/notes/validations` | `PEDAGOGICAL_COUNCIL`, `ADMIN` | Liste toutes les évaluations soumises en attente d'approbation. |
-| `POST` | `/notes/validations/:id/valider` | `PEDAGOGICAL_COUNCIL`, `ADMIN` | Approuve et verrouille l'évaluation (statut `VALIDEE`). |
-| `POST` | `/notes/bulletins/semestre/:id/calculer` | `ADMIN`, `SECRETARY`, `PEDAGOGICAL_COUNCIL` | Déclenche le recalcul automatique des bulletins et des rangs pour un semestre. |
-| `GET` | `/notes/reports/semestres` | `ADMIN`, `SECRETARY`, `PEDAGOGICAL_COUNCIL` | Liste les semestres scolaires disponibles pour l'édition des palmarès. |
-| `GET` | `/notes/reports/semestre/:id` | `ADMIN`, `SECRETARY`, `PEDAGOGICAL_COUNCIL` | Renvoie le palmarès officiel de la promotion (liste des élèves classés avec pourcentages). |
-| `GET` | `/notes/reports/inscription/:insId/semestre/:semId` | `ADMIN`, `SECRETARY`, `PEDAGOGICAL_COUNCIL` | Renvoie les données détaillées d'un bulletin individuel (matière par matière, coefs, notes). |
+| `POST` | `/notes/evaluations/:id/soumettre` | `TEACHER` | Soumet l'évaluation pour validation officielle (statut `SOUMISE`). |
+| `GET` | `/notes/grille/:id` | `TEACHER`, `ADMIN` | Affiche la grille complète d'une évaluation (élèves, notes et statuts). |
+| `GET` | `/notes/validations` | `ADMIN` | Liste toutes les évaluations soumises en attente d'approbation. |
+| `POST` | `/notes/validations/:id/valider` | `ADMIN` | Approuve et verrouille l'évaluation (statut `VALIDEE`). |
+| `POST` | `/notes/bulletins/semestre/:id/calculer` | `ADMIN` | Déclenche le recalcul automatique des bulletins et des rangs pour un semestre. |
+| `GET` | `/notes/reports/semestres` | `ADMIN` | Liste les semestres scolaires disponibles pour l'édition des palmarès. |
+| `GET` | `/notes/reports/semestre/:id` | `ADMIN` | Renvoie le palmarès officiel de la promotion (liste des élèves classés avec pourcentages). |
+| `GET` | `/notes/reports/inscription/:insId/semestre/:semId` | `ADMIN` | Renvoie les données détaillées d'un bulletin individuel (matière par matière, coefs, notes). |
 
 ---
 
@@ -377,8 +375,9 @@ L'application Web frontend (`kotaschool-frontend`) s'exécute par défaut sur le
 
 ### 9.1. Tableau de Bord Dynamique (`/dashboard`)
 Le tableau de bord s'adapte automatiquement selon l'identité de l'utilisateur connecté :
-- **Pour l'Administrateur & le Secrétariat** :
+- **Pour l'Administrateur** :
   - Métriques clés (élèves inscrits, enseignants en poste, cours au programme, affectations).
+  - Compteur des évaluations en attente de validation et accès direct au sas de validation et aux délibérations.
   - Graphiques interactifs Chart.js (répartition des effectifs par section, barres d'activité).
   - **Arbre Hiérarchique D3.js** représentant graphiquement l'organisation de l'école (Sections ➔ Options ➔ Classes).
   - Boutons d'accès direct à l'inscription et aux palmarès.
@@ -386,9 +385,6 @@ Le tableau de bord s'adapte automatiquement selon l'identité de l'utilisateur c
   - Vue synthétique de ses affectations actives.
   - Cartes d'accès rapide à la grille de saisie pour chaque classe/matière.
   - Raccourci vers la saisie des notes.
-- **Pour le Conseil Pédagogique** :
-  - Compteur des évaluations en attente de validation.
-  - Accès direct au sas de révision et aux délibérations.
 - **Pour l'Élève** :
   - Synthèse de ses notes récentes, graphique d'évolution et accès à ses bulletins certifiés.
 

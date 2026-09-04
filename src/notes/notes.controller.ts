@@ -37,34 +37,34 @@ export class NotesController {
     return this.notes.submitEvaluation(id, req.user.id);
   }
 
-  // --- Consultation (enseignant propriétaire, conseil, admin) ---
-  @Roles(AppRole.TEACHER, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  // --- Consultation grille (enseignant propriétaire, admin) ---
+  @Roles(AppRole.TEACHER, AppRole.ADMIN)
   @Get('grille/:id')
   grille(@Param('id') id: string, @Req() req: { user: { id: string } }) {
     return this.notes.grille(id, req.user.id);
   }
 
-  // --- Conseil pédagogique / Admin : validation ---
-  @Roles(AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  // --- Admin : validation officielle ---
+  @Roles(AppRole.ADMIN)
   @Get('validations')
   pending() {
     return this.notes.pendingValidations();
   }
 
-  @Roles(AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Roles(AppRole.ADMIN)
   @Post('validations/:id/valider')
   validate(@Param('id') id: string, @Req() req: { user: { id: string } }) {
     return this.notes.validateEvaluation(id, req.user.id);
   }
 
-  // --- Bulletins (calcul + consultation) ---
-  @Roles(AppRole.TEACHER, AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  // --- Bulletins (calcul + consultation, admin) ---
+  @Roles(AppRole.ADMIN)
   @Post('bulletins/semestre/:id/calculer')
   recalculate(@Param('id') id: string) {
     return this.notes.recalculateSemestre(id);
   }
 
-  @Roles(AppRole.TEACHER, AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Roles(AppRole.ADMIN)
   @Get('bulletins/inscription/:id')
   bulletins(@Param('id') id: string) {
     return this.notes.bulletinsOfInscription(id);
@@ -77,20 +77,20 @@ export class NotesController {
     return this.notes.myGrades(req.user.id);
   }
 
-  // --- Rapports / Bulletins (secrétariat, conseil, admin) ---
-  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  // --- Rapports / Bulletins (admin) ---
+  @Roles(AppRole.ADMIN)
   @Get('reports/semestres')
   reportSemestres() {
     return this.notes.reportSemestres();
   }
 
-  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Roles(AppRole.ADMIN)
   @Get('reports/semestre/:id')
   board(@Param('id') id: string) {
     return this.notes.classBulletinBoard(id);
   }
 
-  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  @Roles(AppRole.ADMIN)
   @Get('reports/inscription/:inscriptionId/semestre/:semestreId')
   detail(@Param('inscriptionId') inscriptionId: string, @Param('semestreId') semestreId: string) {
     return this.notes.inscriptionBulletinDetail(inscriptionId, semestreId);
@@ -103,8 +103,8 @@ export class NotesController {
     return this.notes.myAnnualBulletin(req.user.id);
   }
 
-  // --- Recalcul bulletin annuel (admin / conseil) ---
-  @Roles(AppRole.SECRETARY, AppRole.PEDAGOGICAL_COUNCIL, AppRole.ADMIN)
+  // --- Recalcul bulletin annuel (admin) ---
+  @Roles(AppRole.ADMIN)
   @Post('bulletins/annee/:id/calculer')
   recalculateAnnuel(@Param('id') id: string) {
     return this.notes.recalculateAnnuel(id);
