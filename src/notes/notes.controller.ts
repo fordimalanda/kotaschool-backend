@@ -44,19 +44,6 @@ export class NotesController {
     return this.notes.grille(id, req.user.id);
   }
 
-  // --- Admin : validation officielle ---
-  @Roles(AppRole.ADMIN)
-  @Get('validations')
-  pending() {
-    return this.notes.pendingValidations();
-  }
-
-  @Roles(AppRole.ADMIN)
-  @Post('validations/:id/valider')
-  validate(@Param('id') id: string, @Req() req: { user: { id: string } }) {
-    return this.notes.validateEvaluation(id, req.user.id);
-  }
-
   // --- Bulletins (calcul + consultation, admin) ---
   @Roles(AppRole.ADMIN)
   @Post('bulletins/semestre/:id/calculer')

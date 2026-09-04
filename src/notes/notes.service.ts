@@ -233,42 +233,32 @@ export class NotesService {
     return res;
   }
 
+  /**
+   * L'enseignant finalise sa saisie : les notes sont immédiatement considérées
+   * comme valides et comptent pour le calcul des bulletins (pas d'étape de
+   * validation séparée).
+   */
   async submitEvaluation(id: string, userId: string) {
     const evaluation = await this.prisma.evaluation.findUnique({ where: { id }, include: { affectation: true } });
     if (!evaluation) throw new NotFoundException('Évaluation introuvable');
     const user = await this.prisma.utilisateur.findUnique({ where: { id: userId } });
     if (!user?.enseignantId || evaluation.affectation.idEnseignant !== user.enseignantId) throw new ForbiddenException('Accès refusé');
-    if (evaluation.statut !== StatutEvaluation.BROUILLON) throw new BadRequestException('Seule une évaluation en brouillon peut être soumise');
+    if (evaluation.statut !== StatutEvaluation.BROUILLON) throw new BadRequestException('Seule une saisie en brouillon peut être finalisée');
     const count = await this.prisma.note.count({ where: { idEvaluation: id } });
-    if (count === 0) throw new BadRequestException('Aucune note saisie à soumettre');
-    return this.prisma.evaluation.update({ where: { id }, data: { statut: StatutEvaluation.SOUMISE } });
-  }
-
-  // ------------------------------------------------------------------
-  // Admin : validation officielle des évaluations soumises
-  // ------------------------------------------------------------------
-
-  async pendingValidations() {
-    return this.prisma.evaluation.findMany({
-      where: { statut: StatutEvaluation.SOUMISE },
-      include: {
-        affectation: { include: { annee: true, enseignant: { select: { nom: true, prenom: true } }, classeMatiere: { include: { classe: true, matiere: true } } } },
-        periode: true,
-        semestre: { include: { annee: true } },
-        typeEvaluation: true,
-      },
-      orderBy: { dateEvaluation: 'asc' },
-    });
-  }
-
-  async validateEvaluation(id: string, userId: string) {
-    const evaluation = await this.prisma.evaluation.findUnique({ where: { id } });
-    if (!evaluation) throw new NotFoundException('Évaluation introuvable');
-    if (evaluation.statut !== StatutEvaluation.SOUMISE) throw new BadRequestException('Seule une évaluation soumise peut être validée');
+    if (count === 0) throw new BadRequestException('Aucune note saisie à finaliser');
     const [, updated] = await this.prisma.$transaction([
       this.prisma.note.updateMany({ where: { idEvaluation: id }, data: { estValide: true, valideParId: userId, dateValidation: new Date() } }),
       this.prisma.evaluation.update({ where: { id }, data: { statut: StatutEvaluation.VALIDEE } }),
     ]);
+    // Les notes sont immédiatement comptabilisées dans les bulletins.
+    setImmediate(async () => {
+      try {
+        await this.recalculateSemestre(evaluation.idSemestre);
+        await this.recalculateAnnuel(evaluation.affectation.idAnnee);
+      } catch (err) {
+        console.error('Erreur recalcul bulletins:', err);
+      }
+    });
     return updated;
   }
 

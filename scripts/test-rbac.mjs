@@ -18,8 +18,8 @@ const admin = await login('fordimalanda7@gmail.com', 'MALANDA100');
 await show('LOGIN admin', admin);
 const at = admin.json?.accessToken;
 await show('ADMIN /administration/students', await req('GET', '/administration/students', { token: at }));
-await show('ADMIN /notes/validations', await req('GET', '/notes/validations', { token: at }));
 await show('ADMIN /notes/reports/semestres', await req('GET', '/notes/reports/semestres', { token: at }));
+await show('ADMIN /notes/validations (supprimée → 404)', await req('GET', '/notes/validations', { token: at }));
 
 // 2. TEACHER (25 comptes prof)
 const prof = await login('jean.kabamba@kotaschool.cd', 'prof');
@@ -28,7 +28,7 @@ const pt = prof.json?.accessToken;
 await show('TEACHER /administration/my-assignments', await req('GET', '/administration/my-assignments', { token: pt }));
 await show('TEACHER /notes/context', await req('GET', '/notes/context', { token: pt }));
 await show('TEACHER /administration/students (doit être 403)', await req('GET', '/administration/students', { token: pt }));
-await show('TEACHER /notes/validations (doit être 403)', await req('GET', '/notes/validations', { token: pt }));
+await show('TEACHER /notes/validations (supprimée → 404)', await req('GET', '/notes/validations', { token: pt }));
 
 // 3. STUDENT (élève KOT-2026-001 : BEYA Gloria)
 const eleve = await login('beya.mbombo.gloria@kotaschool.cd', 'student');

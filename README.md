@@ -1,6 +1,6 @@
 # Kotaschool — API (Backend)
 
-API REST du système **Kotaschool** : gestion scolaire, saisie/validation des notes et calcul des bulletins pour le système éducatif de la RDC (EPSP).
+API REST du système **Kotaschool** : gestion scolaire, saisie/publication des notes et calcul des bulletins pour le système éducatif de la RDC (EPSP).
 
 - Base URL : `http://localhost:4000/api/v1`
 - Santé : `GET /api/v1/health`
@@ -117,8 +117,8 @@ Implémentées dans `notes.service.ts`.
 
 | Rôle | Signification |
 |---|---|
-| `ADMIN` | Accès total (administration, validation des notes, bulletins) |
-| `TEACHER` | Saisie des notes de ses affectations |
+| `ADMIN` | Accès total (administration, bulletins, comptes) |
+| `TEACHER` | Saisie et publication directe des notes de ses affectations (elles comptent immédiatement pour les bulletins) |
 | `STUDENT` | Consultation de ses notes et bulletins |
 
 ---
@@ -159,10 +159,8 @@ Implémentées dans `notes.service.ts`.
 | `GET` | `/context` | `TEACHER` | Contexte de saisie (affectations, semestres/périodes, types, évaluations) |
 | `POST` | `/evaluations` | `TEACHER` | Créer une évaluation |
 | `POST` | `/batch` | `TEACHER` | Enregistrer la grille de notes (brouillon, upsert ; cellule vide = suppression) |
-| `POST` | `/evaluations/:id/soumettre` | `TEACHER` | Soumettre l'évaluation (→ `SOUMISE`) |
+| `POST` | `/evaluations/:id/soumettre` | `TEACHER` | Publier la saisie : les notes deviennent valides (→ `VALIDEE`) et comptent immédiatement pour les bulletins |
 | `GET` | `/grille/:id` | `TEACHER`, `ADMIN` | Grille d'évaluation (élèves + notes) |
-| `GET` | `/validations` | `ADMIN` | Évaluations en attente (`SOUMISE`) |
-| `POST` | `/validations/:id/valider` | `ADMIN` | Valider et verrouiller (→ `VALIDEE`, `estValide`) |
 | `POST` | `/bulletins/semestre/:id/calculer` | `ADMIN` | Recalculer les bulletins du semestre + classement |
 | `GET` | `/bulletins/inscription/:id` | `ADMIN` | Bulletins d'un élève |
 | `GET` | `/reports/semestres` | `ADMIN` | Semestres disponibles |

@@ -35,7 +35,7 @@ Dans de nombreux établissements d'enseignement primaire, secondaire et techniqu
 2. Définition rigoureuse de la structure scolaire (sections, options, classes, matières et coefficients).
 3. Affectation précise des enseignants à leurs charges de cours respectives.
 4. Saisie ergonomique des notes avec enregistrement en brouillon.
-5. Verrouillage et validation stricte par l'Administrateur.
+5. Verrouillage automatique des notes dès leur publication par l'enseignant.
 6. Moteur de calcul automatisé des bulletins de période, de semestre et annuels.
 7. Génération de bulletins certifiés au format officiel EPSP (impression A4 et PDF haute fidélité).
 8. Accès en direct pour les élèves et parents à leurs performances scolaires.
@@ -57,7 +57,7 @@ Le projet est conçu selon une architecture moderne découplée (API-First), sé
 │                     BACKEND API REST (NestJS 11)                 │
 │  ├── Auth Module (JWT, Passport, Guards RBAC)                    │
 │  ├── Administration Module (Structure, Inscriptions, Classes)   │
-│  ├── Notes Module (Saisie, Validation, Délibérations, Calcul)   │
+│  ├── Notes Module (Saisie, Publication, Délibérations, Calcul) │
 │  └── Common (Prisma Exception Filters, Validation Pipes)         │
 └─────────────────────────────────┬────────────────────────────────┘
                                   │ Prisma ORM 6 (TypeScript Engine)
@@ -133,8 +133,8 @@ Kotaschool intègre un système complet de sécurité basé sur les rôles (Role
 
 | Rôle Système | Code | Responsabilités & Périmètre d'Action |
 |---|---|---|
-| **Administrateur** | `ADMIN` | Superviseur global. Gestion des comptes utilisateurs, activation de l'année scolaire, création des classes/matières, administration, validation officielle des notes, délibérations et accès sans restriction. |
-| **Enseignant** | `TEACHER` | Accès restreint à ses propres affectations (classes et matières attribuées). Création d'évaluations, saisie des notes en brouillon et soumission pour validation officielle. |
+| **Administrateur** | `ADMIN` | Superviseur global. Gestion des comptes utilisateurs, activation de l'année scolaire, création des classes/matières, administration, délibérations, calcul des bulletins et accès sans restriction. |
+| **Enseignant** | `TEACHER` | Accès restreint à ses propres affectations (classes et matières attribuées). Création d'épreuves, saisie des notes en brouillon et publication directe (prise en compte immédiate dans les bulletins). |
 | **Élève / Parent** | `STUDENT` | Consultation en temps réel des notes obtenues par période, suivi de progression graphique et téléchargement de ses bulletins officiels certifiés. |
 
 ### 4.1. Matrice des Droits d'Accès aux Écrans
@@ -146,8 +146,7 @@ Kotaschool intègre un système complet de sécurité basé sur les rôles (Role
 | `/teachers` | Fiches du corps professoral | ✅ | ❌ | ❌ |
 | `/academic` | Arbre académique, classes, matières & coefficients | ✅ | ❌ | ❌ |
 | `/assignments` | Affectation des enseignants aux classes/matières | ✅ | ❌ | ❌ |
-| `/grades/entry` | Saisie des notes d'évaluations | ❌ | ✅ | ❌ |
-| `/grades/validation`| Validation et verrouillage officiel des évaluations | ✅ | ❌ | ❌ |
+| `/grades/entry` | Saisie des notes | ❌ | ✅ | ❌ |
 | `/reports` | Calcul des délibérations, palmarès & bulletins officiels | ✅ | ❌ | ❌ |
 | `/grades/my-scores` | Consultation des notes en direct de l'élève | ❌ | ❌ | ✅ |
 | `/grades/my-notes` | Visualisation et téléchargement des bulletins élève | ❌ | ❌ | ✅ |
@@ -158,20 +157,18 @@ Kotaschool intègre un système complet de sécurité basé sur les rôles (Role
 
 Le traitement des notes dans Kotaschool suit un protocole anti-fraude rigoureux avant d'aboutir au calcul mathématique officiel du bulletin.
 
-### 5.1. Les 3 Statuts d'une Évaluation
+### 5.1. Cycle d'une Épreuve (statuts)
 
 ```mermaid
 stateDiagram-v2
     [*] --> BROUILLON : Enseignant crée et saisit la grille
     BROUILLON --> BROUILLON : Modifications libres des notes
-    BROUILLON --> SOUMISE : Enseignant clique "Soumettre pour validation"
-    SOUMISE --> VALIDEE : Administrateur clique "Valider & Verrouiller"
-    VALIDEE --> [*] : Prise en compte dans le calcul des bulletins
+    BROUILLON --> VALIDEE : Enseignant publie la saisie ("Publier les cotes")
+    VALIDEE --> [*] : Prise en compte immédiate dans le calcul des bulletins
 ```
 
 1. **`BROUILLON`** : L'enseignant saisit les notes. Il peut enregistrer, corriger ou laisser des cellules vides sans impacter les moyennes globales.
-2. **`SOUMISE`** : L'enseignant a terminé sa saisie et transmet l'évaluation pour validation officielle. La grille devient non modifiable pour l'enseignant.
-3. **`VALIDEE`** : L'Administrateur vérifie la conformité et valide l'évaluation. La note est estampillée avec `estValide = true`, l'identifiant du validateur et la date exacte. Seules les notes validées entrent dans le calcul des bulletins.
+2. **`VALIDEE`** : L'enseignant publie sa saisie : les notes sont immédiatement considérées comme valides (`estValide = true`) et entrent directement dans le calcul des bulletins (aucune étape de validation séparée). En cas d'erreur, l'enseignant peut corriger : les bulletins sont recalculés automatiquement.
 
 ---
 
@@ -358,10 +355,8 @@ L'API REST est préfixée par `/api/v1` et s'exécute par défaut sur le port `4
 | `GET` | `/notes/context` | `TEACHER` | Contexte complet de saisie pour l'enseignant (affectations, périodes actives, types d'épreuves). |
 | `POST` | `/notes/evaluations` | `TEACHER` | Crée une nouvelle évaluation en statut `BROUILLON`. |
 | `POST` | `/notes/batch` | `TEACHER` | Enregistrement par lot des notes saisies dans la grille (mode brouillon). |
-| `POST` | `/notes/evaluations/:id/soumettre` | `TEACHER` | Soumet l'évaluation pour validation officielle (statut `SOUMISE`). |
+| `POST` | `/notes/evaluations/:id/soumettre` | `TEACHER` | Publie la saisie : les notes deviennent valides (statut `VALIDEE`) et comptent immédiatement pour les bulletins. |
 | `GET` | `/notes/grille/:id` | `TEACHER`, `ADMIN` | Affiche la grille complète d'une évaluation (élèves, notes et statuts). |
-| `GET` | `/notes/validations` | `ADMIN` | Liste toutes les évaluations soumises en attente d'approbation. |
-| `POST` | `/notes/validations/:id/valider` | `ADMIN` | Approuve et verrouille l'évaluation (statut `VALIDEE`). |
 | `POST` | `/notes/bulletins/semestre/:id/calculer` | `ADMIN` | Déclenche le recalcul automatique des bulletins et des rangs pour un semestre. |
 | `GET` | `/notes/reports/semestres` | `ADMIN` | Liste les semestres scolaires disponibles pour l'édition des palmarès. |
 | `GET` | `/notes/reports/semestre/:id` | `ADMIN` | Renvoie le palmarès officiel de la promotion (liste des élèves classés avec pourcentages). |
@@ -377,7 +372,7 @@ L'application Web frontend (`kotaschool-frontend`) s'exécute par défaut sur le
 Le tableau de bord s'adapte automatiquement selon l'identité de l'utilisateur connecté :
 - **Pour l'Administrateur** :
   - Métriques clés (élèves inscrits, enseignants en poste, cours au programme, affectations).
-  - Compteur des évaluations en attente de validation et accès direct au sas de validation et aux délibérations.
+  - Accès direct aux bulletins et aux délibérations.
   - Graphiques interactifs Chart.js (répartition des effectifs par section, barres d'activité).
   - **Arbre Hiérarchique D3.js** représentant graphiquement l'organisation de l'école (Sections ➔ Options ➔ Classes).
   - Boutons d'accès direct à l'inscription et aux palmarès.
@@ -389,16 +384,11 @@ Le tableau de bord s'adapte automatiquement selon l'identité de l'utilisateur c
   - Synthèse de ses notes récentes, graphique d'évolution et accès à ses bulletins certifiés.
 
 ### 9.2. Module Saisie des Notes (`/grades/entry`)
-- Sélecteur en cascade intuitif : Affectation ➔ Évaluation existante ou Nouvelle évaluation.
+- Sélecteur en cascade intuitif : Affectation ➔ Période (P1, P2, Examen S1, P3, P4, Examen S2).
 - Grille de saisie matricielle fluide avec navigation clavier, calcul d'indicateurs visuels et gestion des cellules vides.
-- Boutons d'action clairs : *Enregistrer en brouillon* (sauvegarde intermédiaire) et *Soumettre pour validation* (verrouillage et transmission).
+- Boutons d'action clairs : *Enregistrer en brouillon* (sauvegarde intermédiaire) et *Publier les notes* (les notes comptent immédiatement pour les bulletins).
 
-### 9.3. Module Validation Pédagogique (`/grades/validation`)
-- Liste organisée des évaluations transmises par les professeurs.
-- Inspection de la grille de notes avec statistiques de distribution (moyenne de la classe, note min, note max).
-- Bouton sécurisé *Valider et Verrouiller* qui certifie les notes.
-
-### 9.4. Module Palmarès & Bulletins (`/reports`)
+### 9.3. Module Palmarès & Bulletins (`/reports`)
 - Choix du semestre ou de l'année.
 - Bouton *Recalculer le classement* : exécute en quelques millisecondes le calcul des délibérations pour des centaines d'élèves.
 - Tableau de classement officiel affichant le rang, le pourcentage, le total de points et la décision du jury.
@@ -524,7 +514,7 @@ Le projet Kotaschool a été pensé pour pouvoir évoluer facilement vers de nou
 
 1. **Portail Mobile Spécifique pour les Parents d'Élèves (PWA)** :
    - Consultation instantanée des présences, des absences et des retards.
-   - Suivi régulier des notes dès leur validation par l'école.
+   - Suivi régulier des notes dès leur publication par les enseignants.
 2. **Module de Gestion des Frais Scolaires (Minerval)** :
    - Suivi des paiements, des échéances et des soldes par élève.
    - Blocage ou déblocage conditionnel de la délivrance des bulletins officiels selon l'état d'apurement financier.
