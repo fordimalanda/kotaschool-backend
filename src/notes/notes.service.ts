@@ -449,45 +449,55 @@ export class NotesService {
     });
     if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
 
-    const [semestres, notes, bulletins] = await Promise.all([
+    const [semestres, bulletins] = await Promise.all([
       this.prisma.semestre.findMany({ where: { idAnnee: inscription.idAnnee }, include: { periodes: { orderBy: { libelle: 'asc' } } }, orderBy: { libelle: 'asc' } }),
-      this.prisma.note.findMany({
-        where: { idInscription: inscription.id },
-        include: { evaluation: { include: { typeEvaluation: true, periode: true, semestre: true, affectation: { include: { classeMatiere: { include: { matiere: true } } } } } } },
-        orderBy: { evaluation: { dateEvaluation: 'desc' } },
-      }),
       this.prisma.bulletin.findMany({ where: { idInscription: inscription.id, type: TypeBulletin.SEMESTRE } }),
     ]);
 
     const bulletinBySem = new Map(bulletins.map((b) => [b.idSemestre, b]));
     const semestersView = [];
-    for (const s of semestres) {
-      const resultats = notes
-        .filter((n) => n.evaluation.idSemestre === s.id)
-        .map((n) => ({
-          libelle: n.evaluation.libelle,
-          type: n.evaluation.typeEvaluation.libelle,
-          periode: n.evaluation.periode?.libelle ?? 'Examen',
-          matiere: n.evaluation.affectation.classeMatiere.matiere.libelle,
-          note: Number(n.valeurNote),
-          maximum: Number(n.evaluation.maximum),
-          statut: n.evaluation.statut,
-          estValide: n.estValide,
-        }));
+
+    // L'application raisonne en COTES FINALES par période (P1, P2, Examen…) :
+    // on n'expose pas les épreuves élémentaires (interro/TP/devoir) ni leur type.
+    for (let si = 0; si < semestres.length; si++) {
+      const s = semestres[si];
+      const base = si * 2; // Semestre 1 → P1/P2, Semestre 2 → P3/P4
       const bul = bulletinBySem.get(s.id);
-      let lignes: SemestreBulletinData['lignes'] = [];
-      if (bul) {
-        try {
-          lignes = (await this.computeSemestreBulletin(s.id, inscription.id)).lignes;
-        } catch {
-          lignes = [];
+
+      let data: SemestreBulletinData | null = null;
+      try {
+        data = await this.computeSemestreBulletin(s.id, inscription.id);
+      } catch {
+        data = null;
+      }
+
+      const resultats: { libelle: string; type: string; periode: string; matiere: string; note: number; maximum: number; statut: StatutEvaluation; estValide: boolean }[] = [];
+      const addCote = (matiere: string, label: string, periode: string, value: number) => {
+        if (value <= 0) return;
+        resultats.push({
+          libelle: label,
+          type: periode === 'Examen' ? 'Examen' : '',
+          periode,
+          matiere,
+          note: value,
+          maximum: 20,
+          statut: StatutEvaluation.VALIDEE,
+          estValide: true,
+        });
+      };
+      if (data) {
+        for (const l of data.lignes) {
+          addCote(l.matiere, `P${base + 1} - Cotes`, `P${base + 1}`, l.p1 ?? 0);
+          addCote(l.matiere, `P${base + 2} - Cotes`, `P${base + 2}`, l.p2 ?? 0);
+          addCote(l.matiere, 'Examen', 'Examen', l.examen ?? 0);
         }
       }
+
       semestersView.push({
         id: s.id,
         libelle: s.libelle,
         resultats,
-        bulletin: bul ? { totalObtenu: Number(bul.totalObtenu), totalMaximum: Number(bul.totalMaximum), pourcentage: Number(bul.pourcentage), rang: bul.rang, decision: bul.decision, lignes } : null,
+        bulletin: bul && data ? { totalObtenu: Number(bul.totalObtenu), totalMaximum: Number(bul.totalMaximum), pourcentage: Number(bul.pourcentage), rang: bul.rang, decision: bul.decision, lignes: data.lignes } : null,
       });
     }
 
