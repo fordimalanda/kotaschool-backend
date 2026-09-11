@@ -438,16 +438,12 @@ export class NotesService {
   // Élève : consultation de ses propres résultats
   // ------------------------------------------------------------------
 
-  async myGrades(userId: string) {
-    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, include: { eleve: true } });
-    if (!user?.eleve) throw new ForbiddenException('Aucun élève associé à ce compte');
-
-    const inscription = await this.prisma.inscription.findFirst({
-      where: { matricule: user.eleve.matricule },
-      include: { annee: true, classe: { include: { option: { include: { section: true } } } } },
-      orderBy: { annee: { libelle: 'desc' } },
+  async getGradesForInscription(inscriptionId: string) {
+    const inscription = await this.prisma.inscription.findUnique({
+      where: { id: inscriptionId },
+      include: { eleve: true, annee: true, classe: { include: { option: { include: { section: true } } } } },
     });
-    if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
+    if (!inscription) throw new NotFoundException('Aucune inscription trouvée.');
 
     const [semestres, bulletins] = await Promise.all([
       this.prisma.semestre.findMany({ where: { idAnnee: inscription.idAnnee }, include: { periodes: { orderBy: { libelle: 'asc' } } }, orderBy: { libelle: 'asc' } }),
@@ -502,13 +498,26 @@ export class NotesService {
     }
 
     return {
-      eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
+      eleve: { matricule: inscription.eleve.matricule, nom: inscription.eleve.nom, postnom: inscription.eleve.postnom, prenom: inscription.eleve.prenom },
       classe: inscription.classe.libelle,
       option: inscription.classe.option.libelle,
       section: inscription.classe.option.section.libelle,
       annee: inscription.annee.libelle,
       semestres: semestersView,
     };
+  }
+
+  async myGrades(userId: string) {
+    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, include: { eleve: true } });
+    if (!user?.eleve) throw new ForbiddenException('Aucun élève associé à ce compte');
+
+    const inscription = await this.prisma.inscription.findFirst({
+      where: { matricule: user.eleve.matricule },
+      orderBy: { annee: { libelle: 'desc' } },
+    });
+    if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
+
+    return this.getGradesForInscription(inscription.id);
   }
 
   async reportSemestres() {
@@ -744,20 +753,16 @@ export class NotesService {
     }
   }
 
-  /** Bulletin annuel de l'élève connecté. */
-  async myAnnualBulletin(userId: string) {
-    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, include: { eleve: true } });
-    if (!user?.eleve) throw new ForbiddenException('Aucun élève associé à ce compte');
-
-    const inscription = await this.prisma.inscription.findFirst({
-      where: { matricule: user.eleve.matricule },
-      include: { annee: true, classe: { include: { option: { include: { section: true } } } } },
-      orderBy: { annee: { libelle: 'desc' } },
+  /** Bulletin annuel d'une inscription donnée (utilisé par admin et élève). */
+  async getAnnualBulletinForInscription(inscriptionId: string) {
+    const inscription = await this.prisma.inscription.findUnique({
+      where: { id: inscriptionId },
+      include: { eleve: true, annee: true, classe: { include: { option: { include: { section: true } } } } },
     });
-    if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
+    if (!inscription) throw new NotFoundException('Aucune inscription trouvée.');
 
     const baseInfo = {
-      eleve: { matricule: user.eleve.matricule, nom: user.eleve.nom, postnom: user.eleve.postnom, prenom: user.eleve.prenom },
+      eleve: { matricule: inscription.eleve.matricule, nom: inscription.eleve.nom, postnom: inscription.eleve.postnom, prenom: inscription.eleve.prenom },
       classe: inscription.classe.libelle,
       option: inscription.classe.option.libelle,
       section: inscription.classe.option.section.libelle,
@@ -848,6 +853,20 @@ export class NotesService {
         missingInfo: 'Impossible de calculer le bulletin annuel pour le moment.',
       };
     }
+  }
+
+  /** Bulletin annuel de l'élève connecté. */
+  async myAnnualBulletin(userId: string) {
+    const user = await this.prisma.utilisateur.findUnique({ where: { id: userId }, include: { eleve: true } });
+    if (!user?.eleve) throw new ForbiddenException('Aucun élève associé à ce compte');
+
+    const inscription = await this.prisma.inscription.findFirst({
+      where: { matricule: user.eleve.matricule },
+      orderBy: { annee: { libelle: 'desc' } },
+    });
+    if (!inscription) throw new NotFoundException('Aucune inscription trouvée pour cet élève.');
+
+    return this.getAnnualBulletinForInscription(inscription.id);
   }
 
   // ------------------------------------------------------------------

@@ -83,6 +83,18 @@ export class NotesController {
     return this.notes.inscriptionBulletinDetail(inscriptionId, semestreId);
   }
 
+  @Roles(AppRole.ADMIN)
+  @Get('reports/inscription/:inscriptionId/grades')
+  studentGrades(@Param('inscriptionId') inscriptionId: string) {
+    return this.notes.getGradesForInscription(inscriptionId);
+  }
+
+  @Roles(AppRole.ADMIN)
+  @Get('reports/inscription/:inscriptionId/annual')
+  studentAnnual(@Param('inscriptionId') inscriptionId: string) {
+    return this.notes.getAnnualBulletinForInscription(inscriptionId);
+  }
+
   // --- Bulletin annuel élève ---
   @Roles(AppRole.STUDENT)
   @Get('my-annual-bulletin')
